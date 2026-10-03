@@ -1,51 +1,155 @@
-# dsh-plugin-craft
+# dsh-plugin-craft（DSH 插件工坊）
 
-DSH Plugin Workshop — installs a preset named **「插件工坊」** (id: `craft`) that turns the chat into a guided five-stage plugin-building conversation. Pick the preset from the Web preset selector, and the same session is re-mounted with the Workshop assistant persona and the workshop-specific chat tools.
+> **DSH Plugin Workshop** —— 一个为产品经理设计的 DSH 插件开发引导插件。把 Chat 变成"五阶段引导式对话"，让普通用户**用自然语言**告诉 DSH 想做什么插件，DSH 自动完成需求采访 → 设计 → 任务拆分 → 代码生成 → 验证全过程。
+>
+> 源码仓库：<https://github.com/acococ/dsh-plugin-craft>
+> Releases：<https://github.com/acococ/dsh-plugin-craft/releases>
+> 当前版本：**v0.3.3**
 
-> Source: <https://github.com/acococ/dsh-plugin-craft> · Issues / PRs welcome.
+---
 
-## Compatibility
+## ✨ 这个插件能做什么
 
-| Surface | Status |
-|---|---|
-| Harness | DeepSeek Harness `0.1.7-rc.2` (or later) |
-| Node | `^22.19.0 \|\| >=24.0.0` |
-| Platforms | All (pure ESM; no native code, no network at install time) |
-| Companion packages (auto-included by `web` profile) | `@deepseek-ai/dsh-agent-preset`, `@deepseek-ai/dsh-persona`, `@deepseek-ai/dsh-tool-ask-user`, `@deepseek-ai/dsh-skill-filesystem`, `@deepseek-ai/dsh-tool-skill` |
+`dsh-plugin-craft` 是 DeepSeek Harness（DSH）的官方兼容插件。装上之后，在 DSH Chat 的 **preset 选择器**里会出现一个名为 **「插件工坊」** 的预设。选上它，Chat 会以"插件工坊主持人"人格重新加载会话，引导你完成下面五阶段：
 
-## How to use it
+| # | 阶段 | 你要做什么 | 工坊做什么 |
+|---|---|---|---|
+| **1** | 采访 | 点选项卡回答 5-7 个产品级问题 | 把答案落到 `01-interview.md` |
+| **2** | 设计 | 看模块划分 + `cordis.patch.yml` 骨架，同意或退回 | 起草 `02-design.md` |
+| **3** | 拆任务 | 不需要 | 把设计拆成 DAG，写到 `03-tasks.md` |
+| **4** | 生成代码 | 不需要 | 写出 `src/` / `tests/` / `package.json` / `cordis.patch.yml` / 双语 README |
+| **5** | 验证 | 不需要（最多自动修 3 轮） | `dsh-plugin-dev check --strict` + 冒烟测试 + 需求覆盖 |
 
-1. Open Chat in DSH. Click the **preset selector** and pick **「插件工坊」** (id `craft`). The session reloads with this preset active.
-2. Tell the assistant what you want to build in plain language. The assistant walks you through five stages:
+完成后工坊交付 `04-implementation/`，**绝不自动 install 到当前 profile** —— 是否安装由你决定。
 
-| Stage | What happens |
-|---|---|
-| 1. Interview | The assistant asks questions one at a time. You answer in chat. Every answer lands in the workshop's requirement log via the `craft.create_project` and Chat-only interview turn tools. |
-| 2. Design | Once you accept stage 1, the assistant drafts a `cordis.patch.yml` skeleton + module split and asks you to confirm. |
-| 3. Tasks | The assistant (or `dsh-agent-teams`) splits the design into a DAG and writes `03-tasks.md`. |
-| 4. Generate | Engineers write `src/`, `tests/`, `package.json`, `cordis.patch.yml`, README in both languages. Each worker runs `dsh-plugin-dev check` before reporting. |
-| 5. Verify | `dsh-plugin-dev check --strict` + `dsh-plugin-dev verify` + requirement coverage. Up to 3 auto-fix rounds; if all fail the assistant surfaces the failures for you. |
+---
 
-After stage 5, the assistant hands you the result. **It never installs into the current profile** — that requires your separate `dsh plugin --profile web add ./<pkg>.tgz` command.
+## 🚀 三步安装
 
-## What ships
+### 方式 A · 从 GitHub Releases 装 tarball（推荐，零编译）
 
-A single host module that, when activated under the `preset-craft` preset:
+1. 到 <https://github.com/acococ/dsh-plugin-craft/releases> 下载 `dsh-plugin-craft-0.3.3.tgz`
+2. 装到 DSH：
 
-- Exposes `ctx.craft` (the `CraftStore`) so the agent can read/write workshop state.
-- Registers two chat tools, `craft.create_project` and `craft.advance_stage`, that the agent uses to start and step projects.
+   ```powershell
+   dsh plugin --profile web add "C:\path\to\dsh-plugin-craft-0.3.3.tgz"
+   ```
 
-The agent preset itself (`preset-craft` in `cordis.patch.yml`) declares:
+3. 重启 `dsh --profile web`，浏览器 `Ctrl + Shift + R` 硬刷新
 
-| Child entry | Purpose |
-|---|---|
-| `@deepseek-ai/dsh-persona` | Overrides the system prompt so the model knows it is the Workshop host. |
-| `dsh-plugin-craft` (this plugin) | Brings the two Chat tools above + the persistent on-disk store. |
-| `@deepseek-ai/dsh-skill-filesystem` | Mounts the shipped `@deepseek-ai/dsh-agent-preset/skills/` directory so the agent has the `cordis-plugin-development`, `editing-cordis-compositions`, and `cordis-composition-reference` skills. |
+### 方式 B · 从 GitHub 源码装（需 pnpm ≥10）
 
-## Where projects live
+```powershell
+dsh plugin --profile web add "github:acococ/dsh-plugin-craft#v0.3.3"
+```
 
-Live data is written to `$DSH_HOME/projects/dsh-plugin-craft/<plugin-name>/project.json` (default). Override via the `dsh-plugin-craft` row config in your profile `cordis.patch.yml`:
+第一次会触发 `prepare` 脚本构建，需要在 profile 的 `pnpm-workspace.yaml` 里加：
+
+```yaml
+allowBuilds:
+  dsh-plugin-craft: true
+```
+
+### 方式 C · 从 npm 装（计划中）
+
+```powershell
+# 暂未发布到 npm；上面两种方式任选一种即可
+```
+
+### 验证安装
+
+```powershell
+dsh --profile web --dump-config | Select-String dsh-plugin-craft
+```
+
+应该看到两行：`preset-craft` + `dsh-plugin-craft`。然后在 DSH Chat 的 preset 下拉里应能看到 **「插件工坊」**。
+
+---
+
+## 📦 依赖关系（重点 —— 工坊需要配合以下官方插件使用）
+
+工坊本身**只提供** Chat preset 的"工坊控制器"（`CraftStore`）+ 三个 Chat 工具。**完整的五阶段工作流**还需要以下 5 个 DSH 官方插件提供配套能力。
+
+> ✅ 标准 DSH `web` profile 默认已经全部具备，无需手动装。
+> ⚠️ 如果你用的是自定义 / 裁剪 profile，先用 `--dump-config` 验证，缺哪个补哪个。
+
+| 配套插件 | npm 包名 | 工坊为什么需要它 | 工坊里做什么角色 |
+|---|---|---|---|
+| **`@deepseek-ai/dsh-agent-preset`** | `@deepseek-ai/dsh-agent-preset` | preset 注册入口 | 让 `preset-craft` 这个 preset 在 Web 选择器里能挂出来 |
+| **`@deepseek-ai/dsh-persona`** | `@deepseek-ai/dsh-persona` | 覆盖 system prompt | 让模型扮演"插件工坊主持人"人格（产品经理口吻，绝不让你写代码） |
+| **`@deepseek-ai/dsh-tool-ask-user`** | `@deepseek-ai/dsh-tool-ask-user` | 可点击选项卡工具 | 让阶段 1 / 阶段 2 的提问以**点击选项卡**呈现（不是输入框） |
+| **`@deepseek-ai/dsh-skill-filesystem`** | `@deepseek-ai/dsh-skill-filesystem` | 挂载 skills 目录 | 让模型能读到 `cordis-plugin-development`、`editing-cordis-compositions`、`cordis-composition-reference` 三个开发 skill |
+| **`@deepseek-ai/dsh-tool-skill`** | `@deepseek-ai/dsh-tool-skill` | `skill` 工具调用 | 让模型能**实际调用**上面挂载的 skill |
+
+验证命令：
+
+```powershell
+dsh --profile <name> --dump-config | Select-String "dsh-agent-preset|dsh-persona|dsh-tool-ask-user|dsh-skill-filesystem|dsh-tool-skill"
+```
+
+输出非空 = 全部就绪；缺哪个用 `dsh plugin add @deepseek-ai/<pkg>` 补。
+
+### 这个插件本身依赖（peerDependencies）
+
+```json
+{
+  "@deepseek-ai/cordis": "^4.0.2",
+  "@deepseek-ai/dsh-tools": ">=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0 || >=0.1.6-0 <0.2.0 || >=0.1.7-0 <0.2.0",
+  "@deepseek-ai/schemastery": "^3.18.2"
+}
+```
+
+这些由 DSH 宿主自带，独立装插件包无需重复声明。
+
+---
+
+## 🎯 怎么用
+
+1. 打开 DSH Web UI：<http://127.0.0.1:3080>
+2. 进入 **Chat**
+3. 点击 Chat 顶部的 **preset 选择器**
+4. 选 **「插件工坊」**（id `craft`，order=50）
+5. 用自然语言告诉工坊你想做什么，例如：
+   > "我每次打开 DSH 都能看到 NAS 的健康状态"
+   > "我希望 DSH 在我快下班时提醒我哪些任务还没完成"
+
+### Chat 里的工具（模型使用，用户不直接调用）
+
+工坊在 Chat 里直接暴露 3 个工具，模型可调用：
+
+| 工具 | 作用 | 调用方 |
+|---|---|---|
+| `craft.create_project` | 一句话起一个新项目 | 模型在阶段 1 开头调用 |
+| `craft.appendinterview` | 把可点击问题答案写入需求日志 | 模型每收到一个点击答案就调用一次 |
+| `craft.advance_stage` | 接受当前阶段 / 退回修订 | 模型在阶段 1/2/5 结尾调用 |
+
+调用示例（用户看到的是自然语言，模型内部用）：
+
+```
+craft.create_project({
+  pluginName: "device-scanner",
+  fuzzyIdea: "让 AI 看到我家里有哪些设备在线"
+})
+→ { pluginName: "device-scanner", stage: "interview" }
+```
+
+---
+
+## 🗂 项目落盘位置
+
+工坊数据写到 `$DSH_HOME/projects/dsh-plugin-craft/<plugin-name>/`（默认）：
+
+```
+my-foo/
+├── project.json           # 工坊的项目状态（stage / interview / design / stages...）
+├── 01-interview.md        # 阶段 1 产物
+├── 02-design.md           # 阶段 2 产物
+├── 03-tasks.md            # 阶段 3 产物
+├── 04-implementation/     # 阶段 4 产物（src/、tests/、cordis.patch.yml…）
+└── 05-verify-report.md    # 阶段 5 产物
+```
+
+要换位置，在 profile 的 `cordis.patch.yml` 覆盖 `dsh-plugin-craft` 行的 `config`：
 
 ```yaml
 - id: dsh-plugin-craft
@@ -54,44 +158,79 @@ Live data is written to `$DSH_HOME/projects/dsh-plugin-craft/<plugin-name>/proje
     maxListedProjects: 100
 ```
 
-## Chat tools exposed
+---
 
-### `craft.create_project`
+## ⚙️ 兼容性
 
+| 项 | 要求 |
+|---|---|
+| Harness | DeepSeek Harness `0.1.7-rc.2` 或更高 |
+| Node | `^22.19.0 \|\| >=24.0.0` |
+| 平台 | Windows / macOS / Linux（全平台，纯 ESM；无原生代码，安装时无网络） |
+
+---
+
+## 🛠 卸载
+
+```powershell
+dsh plugin --profile web remove dsh-plugin-craft
+# 重启 dsh host
 ```
-pluginName: device-scanner
-fuzzyIdea: "让 AI 看到我家里有哪些设备在线"
-```
 
-Returns `{pluginName, stage}`.
+仅删插件，**项目数据保留在磁盘上**。要彻底清理工坊产物可手动 `rm -rf $DSH_HOME/projects/dsh-plugin-craft/`。
 
-### `craft.advance_stage`
+---
 
-```
-pluginName: device-scanner
-decision: "accept"   # or "revise"
-feedback: "再补点主功能的描述"   # only for revise
-```
+## ⚠️ 0.3.0 破坏性变更（仍在生效）
 
-Returns `{nextStage, awaitingGate}`.
+旧版本（≤0.2.0）会注册一个侧边栏图标 + main 面板，把工坊做成独立 Web 标签。**0.3.0 起工坊不再是带 Web 侧边栏图标 / 独立页面的插件 —— 而是一个 Chat preset**。
 
-## 0.3.0 breaking change
+如果旧版残留的侧边栏图标还在，重启 `dsh --profile web` 就会清除。
 
-Older versions (≤0.2.0) registered a sidebar icon + main panel so the workshop ran in its own Web tab. **0.3.0 removes the sidebar and the Web tab** — the workshop is now a chat preset, not a Web page. If you still have a stale sidebar entry left over from an older install, restart `dsh --profile web` to clear it.
+---
 
-## Development
+## 🧑‍💻 自己开发本插件
 
 ```sh
-pnpm install
-pnpm run typecheck
-pnpm test
-pnpm run build
+pnpm install          # 拉依赖（pnpm ≥10）
+pnpm run typecheck    # tsc --noEmit
+pnpm test             # vitest run（8 个 store 测试）
+pnpm run build        # tsdown → lib/index.{mjs,d.mts}
+pnpm pack             # 出 dsh-plugin-craft-X.Y.Z.tgz
 ```
 
-## Safety boundary
+---
 
-The Workshop **never installs** the produced plugin into the current profile. The deliverable is the on-disk project tree. Installation requires a separate user authorization.
+## 🔒 安全边界
 
-## License
+工坊**绝不自动 install** 你开发的插件到当前 profile。交付物只是磁盘上的项目目录，是否 install 需要用户单独确认（不在本插件范围内）。
+
+---
+
+## 🐛 故障排查
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| preset 下拉里看不到「插件工坊」 | 浏览器没拿到新的 `__DSH_BOOT__` | `Ctrl + Shift + R` 硬刷新 |
+| 硬刷新后仍看不到 | DSH host 进程仍持有旧 preset 列表 | 重启 `dsh --profile web` |
+| `dsh plugin add` 失败：`cannot find module '@deepseek-ai/dsh-agent-preset'` 等 | 当前 profile 缺被引用子条目 | 见上文"依赖关系"，按缺失项补装 |
+| 报 "peerDependencies not met" | DSH host 版本 < 0.1.7-rc.2 | 升级 host 到 0.1.7-rc.2 或更高 |
+| Chat 工具调用失败：项目目录无法写入 | `projectsDir` 路径不存在或无写权限 | 检查绝对路径/权限，或在 profile 里覆盖 |
+| 阶段 5 三轮不过 | 生成代码有红线 / 冒烟失败 | 模型会把失败交回给你（不是插件 bug） |
+| Git 源安装时报 `ERR_PNPM_ALLOW_BUILD_NOT_SET` | pnpm ≥10 默认拒绝 git 依赖跑 prepare | 在 profile 的 `pnpm-workspace.yaml` 加 `allowBuilds: { dsh-plugin-craft: true }` |
+
+---
+
+## 📄 许可证
 
 [Apache License 2.0](LICENSE) © 2026 dsh-plugin-craft contributors.
+
+---
+
+## 🔗 链接
+
+- **仓库**：<https://github.com/acococ/dsh-plugin-craft>
+- **Issue 反馈**：<https://github.com/acococ/dsh-plugin-craft/issues>
+- **DSH 官方仓库**：<https://github.com/deepseek-ai/deepseek-harness>
+- **DSH 文档**：<https://deepseek-harness.github.io/deepseek-harness/>
+- **插件模板参考**：[omdsh-dev/plugin-template](https://github.com/omdsh-dev/plugin-template)
