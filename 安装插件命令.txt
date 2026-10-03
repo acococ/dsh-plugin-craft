@@ -1,0 +1,1 @@
+dsh plugin --profile web add C:\Users\Administrator\.dsh\projects\dsh-plugin-craft\dsh-plugin-craft-0.1.4.tgz

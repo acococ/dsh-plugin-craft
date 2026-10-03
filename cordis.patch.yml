@@ -1,0 +1,127 @@
+# dsh-plugin-craft bundle layer.
+#
+# Two pieces:
+#   1. `dsh-plugin-craft` (this bundle's host entry) — loads `ctx.craft`
+#      (the CraftStore singleton) and the two Chat tools
+#      `craft.create_project` / `craft.advance_stage` / `craft.appendinterview`.
+#      These tools persist the user's choices across the five Workshop stages.
+#   2. `preset-craft` — the agent preset the user picks from the Web preset
+#      selector. Its plugins list composes:
+#        - `@deepseek-ai/dsh-persona` with a PM-flavoured Workshop prompt
+#        - `@deepseek-ai/dsh-tool-ask-user` so the model can ask multiple-
+#          choice questions that the Web client renders as clickable option
+#          cards (no free-text answer box — the user just clicks)
+#        - `@deepseek-ai/dsh-skill-filesystem` mounting the shipped
+#          `@deepseek-ai/dsh-agent-preset/skills/` directory so the
+#          `cordis-plugin-development`, `editing-cordis-compositions`, and
+#          `cordis-composition-reference` skills are visible
+#        - `@deepseek-ai/dsh-tool-skill` so the model can actually call
+#          `skill`
+#      Picking the preset does NOT re-load this bundle — the loader
+#      composes every plugin entry declared anywhere in the profile into
+#      every Agent. The preset only adds the persona + tools + skills
+#      that specialise the model for Workshop conversations.
+#
+# User flow (from a product manager's perspective):
+#   1. Open Chat in DSH, click the preset selector, choose "插件工坊".
+#   2. Tell the assistant in plain language what business outcome you want
+#      ("我每次打开 DSH 都能看到 NAS 的健康状态" / "我希望 DSH 在我快下班时
+#      提醒我哪些任务还没完成"). The assistant calls craft.create_project
+#      to register it.
+#   3. The assistant walks stage 1 (Interview) one clickable question at a
+#      time. The user picks an option from a small list. After enough
+#      requirements are collected the assistant summarises and asks the
+#      user to advance.
+#   4. Stages 2-5 (Design / Tasks / Generate / Verify) run in the same
+#      conversation; the assistant may ask 1-2 clarifying click questions
+#      along the way. Nothing here requires the user to type code or know
+#      implementation details — the assistant owns the implementation
+#      plan and writes the code itself.
+#   5. The assistant never installs the produced plugin into the current
+#      profile; the user installs it manually via dsh plugin add.
+
+- id: dsh-plugin-craft
+  # The host row. Hosts `ctx.craft` (the CraftStore) and the three Chat
+  # tools. Loaded automatically by every Agent on the profile.
+  name: dsh-plugin-craft
+  config:
+    # Where workshop projects are written on disk. Resolved relative to
+    # the DSH home at apply time; overridable from the profile cordis.patch.yml.
+    projectsDir: 'projects/dsh-plugin-craft'
+    # Cap on auto-retained projects; older ones stay on disk but stop
+    # showing in the UI listing.
+    maxListedProjects: 50
+
+# Insert the preset row after the host row. The presets array only
+# references shipped `@deepseek-ai/*` packages — never this bundle itself
+# — so the loader composes them once, not twice.
+- insert:
+    - id: preset-craft
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: craft
+        # Lower than the shipped presets (standard/ptc/minimal/cordis) so
+        # "插件工坊" appears near the end of the roster; raise or remove
+        # this field from the user's profile patch to reorder.
+        order: 50
+        # Display name + description resolved through the shared
+        # `presetDisplayText` fold; shipped presets follow the active locale.
+        name: '插件工坊'
+        description: 'A guided five-stage Workshop for building DSH plugins. The assistant interviews you with clickable questions, drafts a design, splits tasks, generates code, and verifies the result.'
+        plugins:
+          # Persona: tells the model this is the Plugin Workshop host.
+          # The framing here is critical: the USER is a product manager,
+          # not a programmer. The model does all the implementation
+          # research and writing. The persona owns the question flow.
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |
+                      You are the Plugin Workshop host. The user is a product manager — they will describe WHAT they want the plugin to do in plain language, and you figure out HOW. Do NOT ask them about implementation details (modules, tools, Service providers, slots, schemas, IPC). Your job is to translate business outcomes into clickable choices the user can pick in 5 seconds.
+
+                        Tools available in this preset:
+                          • craft.create_project(pluginName, fuzzyIdea) — register a project. The pluginName must match /^[a-z][a-z0-9-]*[a-z0-9]$/; pick a short name from the user's fuzzy idea if they did not give one. fuzzyIdea is their one-line description, restate it as a short sentence.
+                          • craft.appendinterview(pluginName, field, value) — record one requirement from the interview.
+                          • craft.advance_stage(pluginName, decision) — accept ("accept") or revise ("revise") the current stage.
+
+                        Question format: every interview question uses the `ask_user_question` tool. Options must be SHORT business-level labels (4-8 words, plain Chinese when the user speaks Chinese). Put 3-4 options per question. Include an "Other" option only if the answer could plausibly fall outside the listed choices. Prefer multiSelect=false unless the user could clearly hold several of these at once.
+
+                        Five-stage flow:
+                          1. INTERVIEW (5-7 clickable questions, one at a time, in this order):
+                              a. What business outcome does the user want? — derive 3-4 options from their fuzzy idea.
+                              b. When should it run? (e.g. every page load / on a schedule / on demand via button).
+                              c. Where should the user see the result? (sidebar entry / main page / chat reply / status bar / nowhere, just log it).
+                              d. What input does it need? (file paths / URL / current session info / user's typed answer / previous plugin's output).
+                              e. Should it persist anything to disk?
+                              f. Anything that must NEVER happen (constraints / safety / privacy).
+                              g. Anything else the future-you would want to know about this plugin?
+                             After each click, call craft.appendinterview(pluginName, field, value) where field is the question id and value is the chosen label.
+                          2. DESIGN — summarise the gathered answers as 4-6 bullets. Read the cordis-plugin-development skill for the bundle shape, then propose a cordis.patch.yml skeleton plus the bundle folder layout. Ask one clickable question: "Does this design match your intent?" Options: "Yes, looks right", "Mostly — change one thing" (use ask_user_question detail field), "No, rethink it".
+                          3. TASKS — break the work into a DAG and write 03-tasks.md. No question to the user.
+                          4. GENERATE — implement the plugin (src/, tests/, package.json, cordis.patch.yml, README in both languages). Use cordis-plugin-development skill. No question to the user.
+                          5. VERIFY — run dsh-plugin-dev check (--strict) and the bundle's own tests. If something is broken, ask one clickable question to decide whether to retry, skip, or abandon. Otherwise call craft.advance_stage with decision="accept".
+
+                        Stages that need a user click: 1 (interview), 2 (design review), 5 (final verification). Other stages run without bothering the user.
+
+                        Language: follow the user's locale. Speak Chinese when they write Chinese.
+
+                        Never install the produced plugin into the current profile. The user runs dsh plugin add themselves.
+              complete: false
+          # ask_user_question: the clickable option-card tool. The host
+          # service @deepseek-ai/dsh-user-questions is mounted by the
+          # standard composition so the tool shows up automatically; we
+          # only need to load the tool itself here.
+          - id: tool-ask-user
+            name: '@deepseek-ai/dsh-tool-ask-user'
+          # skill-filesystem + a customSkillDir pointing at the shipped
+          # skill directory inside @deepseek-ai/dsh-agent-preset. Same
+          # trick web-app's creator-mode preset uses; copy verbatim.
+          - id: skill-filesystem
+            name: '@deepseek-ai/dsh-skill-filesystem'
+            config:
+              customSkillDirs:
+                - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-agent-preset/package.json')), 'skills')
+          # Expose the `skill` tool itself so the model can actually invoke
+          # what skill-filesystem surfaces.
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
