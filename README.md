@@ -82,6 +82,9 @@ dsh --profile web --dump-config | Select-String dsh-plugin-craft
 | **`@deepseek-ai/dsh-tool-ask-user`** | `@deepseek-ai/dsh-tool-ask-user` | 可点击选项卡工具 | 阶段 1 / 2 |
 | **`@deepseek-ai/dsh-skill-filesystem`** | `@deepseek-ai/dsh-skill-filesystem` | 挂载 skills 目录 | 阶段 2 / 4 |
 | **`@deepseek-ai/dsh-tool-skill`** | `@deepseek-ai/dsh-tool-skill` | `skill` 工具调用 | 阶段 2 / 4 |
+| **`@deepseek-ai/dsh-tool-bash`** | `@deepseek-ai/dsh-tool-bash` | **shell 执行**（bash / PowerShell / cmd 统一由 `dsh-shell` 服务处理，0.1.7+ 起一个 bundle 跨平台） | 阶段 4 / 5 |
+
+### B 组 · 社区插件（必须另外安装，工坊核心工作流依赖）
 
 ### B 组 · 社区插件（必须另外安装，工坊核心工作流依赖）
 
@@ -104,6 +107,8 @@ dsh plugin --profile web add "github:acococ/dsh-plugin-craft#v0.3.3"
 # 重启 dsh host
 dsh --profile web
 ```
+
+> ⚠️ **A 组里的 `@deepseek-ai/dsh-tool-bash` 是 stage 4 / 5 的"手脚"**——pnpm install / typecheck / test / pack、dsh-plugin-dev check / verify 全靠它。没装它工坊只能产出文字，不能跑命令。标准 `web` profile 已经具备。
 
 工坊会在 `cordis.patch.yml` 的 `preset-craft.plugins` 里**显式声明**这两个插件作为 preset 成员，确保选「插件工坊」preset 时它们自动加载到 Agent（不依赖 profile 默认组合）。
 
@@ -242,6 +247,7 @@ pnpm pack             # 出 dsh-plugin-craft-X.Y.Z.tgz
 | `dsh plugin add` 失败：`cannot find module '@deepseek-ai/dsh-agent-preset'` 等 | 当前 profile 缺被引用子条目 | 见上文"依赖关系"，按缺失项补装 |
 | **阶段 3 只能产出文字 DAG、没真正派 worker** | 没装 `@nanmicoder/dsh-agent-teams` 社区插件 | `dsh plugin --profile web add @nanmicoder/dsh-agent-teams` 后重启 |
 | **阶段 4 写出的 `cordis.patch.yml` 不符合规范** | 没装 `dsh-plugin-guide`，模型读不到 `cordis-plugin-development` skill | `dsh plugin --profile web add dsh-plugin-guide` 后重启 |
+| **阶段 4/5 模型说"请运行 pnpm install"但没真跑** | 没装 `@deepseek-ai/dsh-tool-bash`，工坊没有 shell 执行器 | `dsh plugin --profile web add @deepseek-ai/dsh-tool-bash` 后重启 |
 | 报 "peerDependencies not met" | DSH host 版本 < 0.1.7-rc.2 | 升级 host 到 0.1.7-rc.2 或更高 |
 | Chat 工具调用失败：项目目录无法写入 | `projectsDir` 路径不存在或无写权限 | 检查绝对路径/权限，或在 profile 里覆盖 |
 | 阶段 5 三轮不过 | 生成代码有红线 / 冒烟失败 | 模型会把失败交回给你（不是插件 bug） |

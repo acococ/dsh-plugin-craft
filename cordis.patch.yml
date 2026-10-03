@@ -142,3 +142,14 @@
           # falls back to guessing Cordis conventions.
           - id: plugin-guide
             name: dsh-plugin-guide
+          # tool-bash: the official shell execution tool. As of DSH 0.1.7+
+          # this single bundle handles bash, PowerShell, and cmd.exe
+          # through a unified `dsh-shell` service (the shell is chosen
+          # per-platform from `dsh-shell-env`). Stages 4 (Generate) and
+          # 5 (Verify) MUST run commands — pnpm install, pnpm run
+          # typecheck, pnpm test, pnpm pack, dsh-plugin-dev check
+          # --strict, dsh-plugin-dev verify. Without this entry the
+          # model can only describe what to type; it cannot actually
+          # execute anything.
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
