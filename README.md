@@ -2,13 +2,16 @@
 
 DSH Plugin Workshop — installs a preset named **「插件工坊」** (id: `craft`) that turns the chat into a guided five-stage plugin-building conversation. Pick the preset from the Web preset selector, and the same session is re-mounted with the Workshop assistant persona and the workshop-specific chat tools.
 
+> Source: <https://github.com/acococ/dsh-plugin-craft> · Issues / PRs welcome.
+
 ## Compatibility
 
 | Surface | Status |
 |---|---|
-| Harness | DeepSeek Harness `0.1.7-rc.2` |
+| Harness | DeepSeek Harness `0.1.7-rc.2` (or later) |
 | Node | `^22.19.0 \|\| >=24.0.0` |
 | Platforms | All (pure ESM; no native code, no network at install time) |
+| Companion packages (auto-included by `web` profile) | `@deepseek-ai/dsh-agent-preset`, `@deepseek-ai/dsh-persona`, `@deepseek-ai/dsh-tool-ask-user`, `@deepseek-ai/dsh-skill-filesystem`, `@deepseek-ai/dsh-tool-skill` |
 
 ## How to use it
 

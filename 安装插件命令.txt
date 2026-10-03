@@ -1,1 +1,110 @@
-dsh plugin --profile web add C:\Users\Administrator\.dsh\projects\dsh-plugin-craft\dsh-plugin-craft-0.1.4.tgz
+================================================================
+  dsh-plugin-craft v0.3.3 — 安装 / 更新 / 卸载 / 打包
+  仓库: https://github.com/acococ/dsh-plugin-craft.git
+  DSH 默认 web profile: http://127.0.0.1:3080
+================================================================
+
+────────────────────────────────────────────────────────────────
+ 1. 安装（用户最常用）
+────────────────────────────────────────────────────────────────
+  从本地 tarball 安装（推荐，离线、版本固定、不触发 prepare）:
+
+      dsh plugin --profile web add "C:\Users\Administrator\.dsh\projects\dsh-plugin-craft\dsh-plugin-craft-0.3.3.tgz"
+
+  从 GitHub 直接装（会拉源码并跑 prepare，请先确认 pnpm ≥10):
+
+      dsh plugin --profile web add "github:acococ/dsh-plugin-craft#v0.3.3"
+
+  从 GitHub 装最新版:
+
+      dsh plugin --profile web add "github:acococ/dsh-plugin-craft"
+
+  装完后必须重启 dsh host:
+
+      关闭现有 dsh web 会话 → 重新执行 `dsh --profile web`（或对应启动命令）
+
+  首次安装后浏览器需要硬刷新:
+
+      Ctrl + Shift + R  （让新的 __DSH_BOOT__ 加载）
+
+────────────────────────────────────────────────────────────────
+ 2. 验证安装是否生效
+────────────────────────────────────────────────────────────────
+  dsh --profile web --dump-config | Select-String dsh-plugin-craft
+  # 输出里应能看到 preset-craft + dsh-plugin-craft 两条
+
+  浏览器打开 http://127.0.0.1:3080 → 进入 Chat → 点击预设下拉框
+  # 列表里应能看到 "插件工坊" (id: craft)
+
+────────────────────────────────────────────────────────────────
+ 3. 升级（保留用户数据）
+────────────────────────────────────────────────────────────────
+  打新版 tarball:
+      cd C:\Users\Administrator\.dsh\projects\dsh-plugin-craft
+      pnpm install            # 重新拉依赖 + 自动触发 prepare build
+      pnpm run typecheck      # 0 errors
+      pnpm test               # 8/8 passed
+      pnpm pack               # 生成 dsh-plugin-craft-0.3.X.tgz
+
+  替换线上版本:
+      dsh plugin --profile web remove dsh-plugin-craft
+      dsh plugin --profile web add "C:\Users\Administrator\.dsh\projects\dsh-plugin-craft\dsh-plugin-craft-0.3.X.tgz"
+      重启 dsh host + 浏览器硬刷新
+
+  用户落盘数据 (C:\Users\Administrator\.dsh\projects\dsh-plugin-craft\<plugin-name>\)
+  在 remove / add 期间不会被删除；可手动 cp -r 备份。
+
+────────────────────────────────────────────────────────────────
+ 4. 卸载
+────────────────────────────────────────────────────────────────
+  dsh plugin --profile web remove dsh-plugin-craft
+  重启 dsh host
+
+  仅删插件、不删项目数据；项目目录在
+  C:\Users\Administrator\.dsh\projects\dsh-plugin-craft\ 下保留。
+
+────────────────────────────────────────────────────────────────
+ 5. 提交 GitHub（开发者）
+────────────────────────────────────────────────────────────────
+  cd C:\Users\Administrator\.dsh\projects\dsh-plugin-craft
+
+  git status
+  git add package.json cordis.patch.yml README.md README-zh.md src\ lib\ tests\ locale\ tsconfig.json tsdown.config.mjs vitest.config.ts LICENSE icon.svg USAGE.md 安装插件命令.txt pnpm-lock.yaml pnpm-workspace.yaml
+
+  git commit -m "更新: <本次改动一句话描述>"
+  git tag v0.3.3
+  git push origin main --tags
+
+────────────────────────────────────────────────────────────────
+ 6. 依赖关系（重要 — 安装前请确认宿主 profile 已具备）
+────────────────────────────────────────────────────────────────
+  本插件运行需要的 4 个核心包（已在 peerDependencies 声明）：
+
+      @deepseek-ai/cordis         ^4.0.2     DSH 宿主自带，无需独立装
+      @deepseek-ai/dsh-tools      ≥0.1.2-rc.1<0.2.0  DSH 宿主自带，无需独立装
+      @deepseek-ai/schemastery    ^3.18.2    DSH 宿主自带，无需独立装
+
+  preset-craft 在 cordis.patch.yml 里直接 require 的 4 个官方包
+  （这些是宿主 profile 必须已经激活的标准组合）：
+
+      @deepseek-ai/dsh-agent-preset        提供 preset 框架（注册入口）
+      @deepseek-ai/dsh-persona             提供 persona section hook
+      @deepseek-ai/dsh-tool-ask-user       提供 ask_user_question 工具
+      @deepseek-ai/dsh-skill-filesystem    提供 skill 目录挂载
+      @deepseek-ai/dsh-tool-skill          提供 skill 工具
+
+  上面 5 个全部由 DSH 的 web profile 标准组合提供，
+  普通的 web profile 启动后即具备，无需单独安装。
+  如果用户用的是 headless / 砍过的 profile，请先确认它们已注册：
+
+      dsh --profile <name> --dump-config | Select-String "dsh-agent-preset|dsh-persona|dsh-tool-ask-user|dsh-skill-filesystem|dsh-tool-skill"
+
+  输出为空 → 用同样的 dsh plugin add 命令从 npm 装缺失项。
+
+────────────────────────────────────────────────────────────────
+ 7. 节点与 DSH 版本要求
+────────────────────────────────────────────────────────────────
+  Node:    ^22.19.0 || >=24.0.0
+  pnpm:    ≥10（默认 11.7.0，本机已验证）
+  DSH:     DeepSeek Harness 0.1.7-rc.2 或更高
+  平台:    Windows / macOS / Linux（全平台，纯 TS 编译产物）

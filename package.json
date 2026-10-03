@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-craft",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "DSH Plugin Workshop — ships a custom agent preset (id: craft, label: 插件工坊) that pairs the workshop tools with a plugin-development persona so users can build DSH plugins through chat.",
   "type": "module",
   "main": "lib/index.mjs",
@@ -19,9 +19,6 @@
     "locale",
     "README.md",
     "README-zh.md",
-    "README-es.md",
-    "README-pt.md",
-    "README-hi.md",
     "LICENSE"
   ],
   "scripts": {

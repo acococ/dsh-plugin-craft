@@ -2,13 +2,16 @@
 
 DSH 插件工坊 —— 注册一个名为 **「插件工坊」** 的预设（preset id `craft`），把 Chat 变成五阶段引导的开发插件对话。在 Web 的预设下拉里选这个预设，Chat 会用「插件工坊主持人」人格重新加载会话。
 
+> 源码仓库：<https://github.com/acococ/dsh-plugin-craft> · 欢迎提 Issue / PR。
+
 ## 兼容性
 
 | 项 | 状态 |
 |---|---|
-| Harness | DeepSeek Harness `0.1.7-rc.2` |
+| Harness | DeepSeek Harness `0.1.7-rc.2`（或更高） |
 | Node | `^22.19.0 \|\| >=24.0.0` |
 | 平台 | 全部（纯 ESM；无原生代码，安装时无网络） |
+| 配套包（`web` profile 默认已具备） | `@deepseek-ai/dsh-agent-preset`、`@deepseek-ai/dsh-persona`、`@deepseek-ai/dsh-tool-ask-user`、`@deepseek-ai/dsh-skill-filesystem`、`@deepseek-ai/dsh-tool-skill` |
 
 ## 怎么用
 
