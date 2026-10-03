@@ -66,28 +66,54 @@ dsh --profile web --dump-config | Select-String dsh-plugin-craft
 
 ---
 
-## 📦 依赖关系（重点 —— 工坊需要配合以下官方插件使用）
+## 📦 依赖关系（重点 —— 工坊需要配合 7 个插件一起使用）
 
-工坊本身**只提供** Chat preset 的"工坊控制器"（`CraftStore`）+ 三个 Chat 工具。**完整的五阶段工作流**还需要以下 5 个 DSH 官方插件提供配套能力。
+工坊本身**只提供** Chat preset 的"工坊控制器"（`CraftStore`）+ 三个 Chat 工具。**完整的五阶段工作流**需要 **5 个官方插件 + 2 个社区插件**协同工作：
 
-> ✅ 标准 DSH `web` profile 默认已经全部具备，无需手动装。
-> ⚠️ 如果你用的是自定义 / 裁剪 profile，先用 `--dump-config` 验证，缺哪个补哪个。
+### A 组 · DSH 官方插件（标准 `web` profile 已具备）
 
-| 配套插件 | npm 包名 | 工坊为什么需要它 | 工坊里做什么角色 |
+> ✅ 标准 `web` profile 默认已经全部具备，无需手动装。
+> ⚠️ 自定义 / 裁剪 profile 必须单独安装。
+
+| 配套插件 | npm 包名 | 工坊为什么需要它 | 阶段 |
 |---|---|---|---|
-| **`@deepseek-ai/dsh-agent-preset`** | `@deepseek-ai/dsh-agent-preset` | preset 注册入口 | 让 `preset-craft` 这个 preset 在 Web 选择器里能挂出来 |
-| **`@deepseek-ai/dsh-persona`** | `@deepseek-ai/dsh-persona` | 覆盖 system prompt | 让模型扮演"插件工坊主持人"人格（产品经理口吻，绝不让你写代码） |
-| **`@deepseek-ai/dsh-tool-ask-user`** | `@deepseek-ai/dsh-tool-ask-user` | 可点击选项卡工具 | 让阶段 1 / 阶段 2 的提问以**点击选项卡**呈现（不是输入框） |
-| **`@deepseek-ai/dsh-skill-filesystem`** | `@deepseek-ai/dsh-skill-filesystem` | 挂载 skills 目录 | 让模型能读到 `cordis-plugin-development`、`editing-cordis-compositions`、`cordis-composition-reference` 三个开发 skill |
-| **`@deepseek-ai/dsh-tool-skill`** | `@deepseek-ai/dsh-tool-skill` | `skill` 工具调用 | 让模型能**实际调用**上面挂载的 skill |
+| **`@deepseek-ai/dsh-agent-preset`** | `@deepseek-ai/dsh-agent-preset` | preset 注册入口 | 全程 |
+| **`@deepseek-ai/dsh-persona`** | `@deepseek-ai/dsh-persona` | 覆盖 system prompt，让模型扮"插件工坊主持人" | 全程 |
+| **`@deepseek-ai/dsh-tool-ask-user`** | `@deepseek-ai/dsh-tool-ask-user` | 可点击选项卡工具 | 阶段 1 / 2 |
+| **`@deepseek-ai/dsh-skill-filesystem`** | `@deepseek-ai/dsh-skill-filesystem` | 挂载 skills 目录 | 阶段 2 / 4 |
+| **`@deepseek-ai/dsh-tool-skill`** | `@deepseek-ai/dsh-tool-skill` | `skill` 工具调用 | 阶段 2 / 4 |
 
-验证命令：
+### B 组 · 社区插件（必须另外安装，工坊核心工作流依赖）
+
+> ⚠️ 这两个插件是工坊**真正干活的"手脚"**——阶段 3 的任务拆分、阶段 4 的并行代码生成，都靠它们。
+> ❌ 没装这2个插件，工坊阶段 1/2 能跑（聊天提问），阶段 3/4 会"模型只能用文字描述"。
+
+| 配套插件 | npm 包名 | 仓库 | 工坊为什么需要它 | 阶段 | 安装命令 |
+|---|---|---|---|---|---|
+| **`@nanmicoder/dsh-agent-teams`** | `@nanmicoder/dsh-agent-teams` | <https://github.com/NanmiCoder/dsh-agent-teams> | 把设计稿拆成 DAG、并行调度多个 Engineer agent | 阶段 3 / 4 | `dsh plugin --profile web add @nanmicoder/dsh-agent-teams` |
+| **`dsh-plugin-guide`** | `dsh-plugin-guide` | <https://github.com/PerryLink/dsh-plugin-guide> | 提供 `cordis-plugin-development`、`editing-cordis-compositions`、`cordis-composition-reference` 三个开发 skill | 阶段 2 / 4 | `dsh plugin --profile web add dsh-plugin-guide` |
+
+### 一次性安装全部依赖
+
+在装 `dsh-plugin-craft` 之前先装这两个社区插件（如果还没装的话）：
 
 ```powershell
-dsh --profile <name> --dump-config | Select-String "dsh-agent-preset|dsh-persona|dsh-tool-ask-user|dsh-skill-filesystem|dsh-tool-skill"
+dsh plugin --profile web add @nanmicoder/dsh-agent-teams
+dsh plugin --profile web add dsh-plugin-guide
+dsh plugin --profile web add "github:acococ/dsh-plugin-craft#v0.3.3"
+# 重启 dsh host
+dsh --profile web
 ```
 
-输出非空 = 全部就绪；缺哪个用 `dsh plugin add @deepseek-ai/<pkg>` 补。
+工坊会在 `cordis.patch.yml` 的 `preset-craft.plugins` 里**显式声明**这两个插件作为 preset 成员，确保选「插件工坊」preset 时它们自动加载到 Agent（不依赖 profile 默认组合）。
+
+### 验证全部就绪
+
+```powershell
+dsh --profile web --dump-config | Select-String "dsh-agent-preset|dsh-persona|dsh-tool-ask-user|dsh-skill-filesystem|dsh-tool-skill|dsh-agent-teams|dsh-plugin-guide|dsh-plugin-craft"
+```
+
+输出应包含**全部 8 条**记录（5 个官方 + 2 个社区 + dsh-plugin-craft 本身）。
 
 ### 这个插件本身依赖（peerDependencies）
 
@@ -214,6 +240,8 @@ pnpm pack             # 出 dsh-plugin-craft-X.Y.Z.tgz
 | preset 下拉里看不到「插件工坊」 | 浏览器没拿到新的 `__DSH_BOOT__` | `Ctrl + Shift + R` 硬刷新 |
 | 硬刷新后仍看不到 | DSH host 进程仍持有旧 preset 列表 | 重启 `dsh --profile web` |
 | `dsh plugin add` 失败：`cannot find module '@deepseek-ai/dsh-agent-preset'` 等 | 当前 profile 缺被引用子条目 | 见上文"依赖关系"，按缺失项补装 |
+| **阶段 3 只能产出文字 DAG、没真正派 worker** | 没装 `@nanmicoder/dsh-agent-teams` 社区插件 | `dsh plugin --profile web add @nanmicoder/dsh-agent-teams` 后重启 |
+| **阶段 4 写出的 `cordis.patch.yml` 不符合规范** | 没装 `dsh-plugin-guide`，模型读不到 `cordis-plugin-development` skill | `dsh plugin --profile web add dsh-plugin-guide` 后重启 |
 | 报 "peerDependencies not met" | DSH host 版本 < 0.1.7-rc.2 | 升级 host 到 0.1.7-rc.2 或更高 |
 | Chat 工具调用失败：项目目录无法写入 | `projectsDir` 路径不存在或无写权限 | 检查绝对路径/权限，或在 profile 里覆盖 |
 | 阶段 5 三轮不过 | 生成代码有红线 / 冒烟失败 | 模型会把失败交回给你（不是插件 bug） |

@@ -125,3 +125,20 @@
           # what skill-filesystem surfaces.
           - id: tool-skill
             name: '@deepseek-ai/dsh-tool-skill'
+          # dsh-agent-teams (community plugin, NanmiCoder/dsh-agent-teams,
+          # published on npm as `@nanmicoder/dsh-agent-teams`):
+          # stage 3 (Tasks) breaks the design into a DAG and runs multiple
+          # engineer agents in parallel during stage 4 (Generate). Without
+          # this plugin loaded under the preset, the model can only emit
+          # 03-tasks.md as text — it cannot actually spin up workers.
+          - id: agent-teams
+            name: '@nanmicoder/dsh-agent-teams'
+          # dsh-plugin-guide (community plugin, PerryLink/dsh-plugin-guide,
+          # published on npm as `dsh-plugin-guide`):
+          # provides the `cordis-plugin-development`, `editing-cordis-
+          # compositions`, and `cordis-composition-reference` skills that
+          # stages 2 (Design) and 4 (Generate) explicitly read for the
+          # bundle shape and contract reference. Without it, the model
+          # falls back to guessing Cordis conventions.
+          - id: plugin-guide
+            name: dsh-plugin-guide
