@@ -1,114 +1,454 @@
-// Type definitions for the dsh-plugin-craft Workshop. The store service and
-// the Host tools both speak this vocabulary; the Client page receives the
-// same shape over a Remote boundary.
+// ============================================================================
+// src/types.ts —— 全插件共用的「词汇表」
+// ============================================================================
+//
+// 这个文件是整个工坊的数据字典。store 存盘、Chat 工具收发参数、Client 页面
+// 渲染，全都靠这里的类型对齐，所以它必须保持零依赖：
+//   · 不 import Cordis（框架类型）
+//   · 不 import Schemastery（配置 schema）
+// 这样它才能被单测直接 import，也才能安全地跨 Host / Client 边界传递。
+//
+// ----------------------------------------------------------------------------
+// 【本文件出现的 TypeScript 语法速查】
+// ----------------------------------------------------------------------------
+// 下面每个词汇第一次出现时都会再解释一遍，这里先给个总览：
+//
+//   type 名字 = 'a' | 'b'
+//       「联合类型」。意思是这个值**只能是**列出来的其中之一。
+//       打个比方：像「单选题的选项」—— 只能是 A/B/C，不能是别的。
+//
+//   interface 名字 { 字段: 类型 }
+//       「接口」。用来说明一个对象**应该有哪些字段**。
+//       纯说明文档，编译后什么都不剩，运行时也不存在。
+//
+//   字段?: 类型
+//       问号 = 「这个字段可以不填」。不填时它的值是 undefined。
+//
+//   字段: unknown
+//       unknown = 「类型未知的万能占位」。它接受任何值，但在你使用之前
+//       必须先缩小范围（这正是它比 any 严格的地方）。
+//
+//   readonly 类型[]
+//       只读数组：可以读、不能 push/改。
+//
+//   as const
+//       把字面量「冻结」成最精确的类型，让 TS 记住你写的每一个具体值。
+//
+//   (参数: 类型): 返回类型
+//       函数签名：括号里是参数，冒号后面是返回值。
+//
+// ----------------------------------------------------------------------------
+// 【这个文件里的所有代码在运行时会变成什么？】
+// ----------------------------------------------------------------------------
+// 关键认知：**几乎什么都不剩。**
+//   · `interface` / `type`      → 编译后整段消失，因为它们只是给编译器看的
+//   · `isValidPluginName` 函数  → 保留（它是真的能跑的代码）
+//   · `buildInitialStages` 函数 → 保留
+//   · `STAGE_ORDER` 常量        → 保留（它是真的数据）
+//   · 所有 `/** */` 注释        → 保留在 .d.mts 里（给别人看的说明书）
+//   · 所有 `//` 注释            → 丢弃（只给读源码的人看）
+// ============================================================================
 
+
+// ############################################################################
+// 一、Stage：六道工序
+// ############################################################################
+//
+// 【什么是「联合类型」】
+//   写法是 `type 别名 = 值1 | 值2 | 值3`，竖线 `|` 的意思是「或者」。
+//   它规定：这个变量只能是列出来的其中之一，写别的值 TypeScript 直接报错。
+//   这就是本文件能帮忙「挡住手滑」的地方 —— 你把 `'interveiw` 拼错了，
+//   保存文件时编辑器就会立刻标红，而不是等到线上才发现。
+//
+// 【和下面的 StageStatus 有什么区别】
+//   Stage       = 「是哪道工序」  → 工序的**身份**
+//   StageStatus = 「它什么状态」  → 工序的**状态**
+//   进度条上的一格 = 这两者的组合。
+//
+// ⚠️ 已知不一致：cordis.patch.yml 里的 persona 提示词描述的是**五**阶段流程，
+// 把「1、2、5」当成需要点击的关卡，而且完全没提 `deliver`。改任何一边之前先对齐。
+/** 工坊的六道工序，按 {@link STAGE_ORDER} 的顺序依次走过。
+ *
+ * AUTO（自动）工序由助手一口气跑完；GATE（关卡）工序必须用户点一下才能离开。
+ */
 export type Stage =
-  | 'interview' // Stage 1 — collecting requirements
-  | 'design' // Stage 2 — designing architecture
-  | 'tasks' // Stage 3 — splitting into tasks (AUTO)
-  | 'generate' // Stage 4 — generating code (AUTO)
-  | 'verify' // Stage 5 — checks + smoke tests (AUTO)
-  | 'deliver' // Final delivery page
+  // 第 1 道：需求访谈。属于「关卡」——必须用户点一下才能往下走。
+  | 'interview'
+  // 第 2 道：出设计方案。关卡，用户要审阅设计稿。
+  | 'design'
+  // 第 3 道：把设计拆成任务 DAG。属于「自动」——助手一口气跑完，不打扰用户。
+  | 'tasks'
+  // 第 4 道：真正写代码。自动工序。
+  | 'generate'
+  // 第 5 道：跑 dsh-plugin-dev check + 自己的单测。自动工序。
+  | 'verify'
+  // 第 6 道：交付页。关卡，而且是最后一道，之后无法再前进。
+  | 'deliver'
 
+
+// ############################################################################
+// 二、STAGE_ORDER：工序的权威顺序表
+// ############################################################################
+//
+// 【为什么这个顺序表这么重要】
+//   它是「下一道工序是什么」的唯一真相来源。
+//   store 里所有「往前走一步」的逻辑，都是在这个数组上做 index + 1，
+//   所以想新增一道工序，只需要往这里加一项，别处不用动。
+//
+//   ⚠️ 顺序本身不能乱改。改了顺序 = 把整个工坊流程重排了。
+//
+// 【`readonly Stage[]` 是什么意思 —— 两层】
+//   Stage[]  = 一个数组，里面每项都是 Stage 类型
+//   readonly = 这个数组**只能读，不能改**。写 STAGE_ORDER.push(...) 会报错。
+//   加 readonly 是为了保护这张表：万一某个函数手滑往里 push 一项，
+//   编译器会当场拦下来，而不是让整个流程在运行时悄悄跑歪。
+//
+// 【`as const` 是什么意思】
+//   让 TypeScript 把这个数组当「字面量元组」而不是「普通数组」。
+//   普通数组：TS 只知道里面是 Stage[]，第 1 项也可能是 'deliver'。
+//   加 as const 之后：TS 记得你写下的每一个具体值和顺序，
+//   甚至能推出 STAGE_ORDER[0] 一定是 'interview'，类型就是字面量 'interview'。
+//
+//   打个比方：普通数组像「一盒抽出来的卡片」，你知道里面是 6 张工序卡但不记得
+//   第 1 张是哪个；as const 之后像「一张排好序的清单」，位置和内容一一对应。
+/** 工序的权威顺序表。`CraftStore.advance()` 靠在这个数组上取下标来判断
+ *  「下一道是哪道」，所以想新增一道工序，只能往这里加一项。
+ */
 export const STAGE_ORDER: readonly Stage[] = [
-  'interview',
-  'design',
-  'tasks',
-  'generate',
-  'verify',
-  'deliver',
-] as const
+  'interview', // 数组下标 0 = 第 1 道
+  'design', // 下标 1 = 第 2 道
+  'tasks', // 下标 2 = 第 3 道
+  'generate', // 下标 3 = 第 4 道
+  'verify', // 下标 4 = 第 5 道
+  'deliver', // 下标 5 = 第 6 道（终点）
+] as const // as const 让 TS 把它当只读的、每个位置都确定的字面量元组
 
-/** State machine values used by the StageStepper UI. */
-export type StageStatus = 'pending' | 'auto' | 'gate' | 'done' | 'failed'
 
+// ############################################################################
+// 三、StageStatus：每道工序在 UI 上的状态
+// ############################################################################
+//
+// 又是一个联合类型。五个值对应进度条上一格的五种画法。
+//
+// 【GATE（关卡）是什么意思】
+//   中文「关卡」在这里是游戏术语：过了这一关才能继续。
+//   具体表现是：助手自动跑到这一步就**停下来**，等用户在页面上点一下。
+//   哪些工序是关卡，见 store.ts 里的 isAutoStage()。
+/** 每道工序在 UI 上的状态：还没走到、正在自动跑、卡住等点击、已通过、跑挂了
+ *  *（跑挂时看 {@link StageView.error}）。
+ */
+export type StageStatus =
+  | 'pending' // 还没走到 —— 画成灰色
+  | 'auto' // 正在自动执行，助手在跑 —— 画成蓝色转圈
+  | 'gate' // 已到达，卡住等用户点击 —— 画成橙色高亮
+  | 'done' // 已通过 —— 画成绿色对勾
+  | 'failed' // 跑挂了，需要看 error 字段 —— 画成红色叉
+
+
+// ############################################################################
+// 四、StageView：进度条上的一格
+// ############################################################################
+//
+// 【什么是 interface】
+//   interface 是 TypeScript 的一种「类型定义」，用来说明一个对象
+//   应该有哪些字段、每个字段是什么类型。它是**纯说明文档**，编译后什么都不剩。
+//   打个比方：像一张商品标签模板 —— 上面写着「名称、产地、规格」，
+//   标签本身不是商品，只是对商品的描述。
+//
+//   这一段只给开发者看（IDE 补全、类型检查用），运行时不存在。
+//
+// 【问号是什么意思】
+//   `error?: string` 里的 ? 表示「这个字段可以没有」。
+//   没有时访问它会得到 undefined。所以下面用的时候必须配合可选链 ?.，
+//   否则 TypeScript 会报「可能为 undefined」。
+//
+// 【为什么要把工序和状态打包成一个对象，而不是分开两个数组】
+//   因为进度条是按「格」渲染的。每格天然要同时知道
+//   「我是哪道工序」+「我什么状态」。打包在一起，
+//   store.advance() 推进时只要找到那一格改字段就行，不会出现两个数组对不上的情况。
+/** 进度条上的一格 = 哪道工序 + 它当前什么状态。
+ *
+ * 为什么要把工序和状态打包成一个对象，而不是分成两个平行数组？
+ * 因为进度条是按「格」渲染的，每格天然要同时知道这两件事。
+ * 打包在一起，`store.advance()` 推进时只改那一格的字段，
+ * 不会出现两个数组长度对不上、状态错位的情况。
+ */
 export interface StageView {
+  /** 哪道工序 */
   stage: Stage
+  /** 它现在什么状态 */
   status: StageStatus
-  /** Optional last error message when status === 'failed'. */
+  /** 可选：只有 status === 'failed' 时才有值 */
   error?: string
 }
 
-/** Plain data shape for a single requirement entry inside the interview spec. */
+
+// ############################################################################
+// 五、InterviewAnswer：访谈里的一条需求
+// ############################################################################
+//
+// 【只增不改的审计轨迹】
+//   访谈是「用户到底点了什么」的记录，属于历史事实。
+//   所以这个结构里没有 update/delete 的入口，store.appendInterview()
+//   也只会往数组尾部 push，永远不修改已有项。
+//
+// 【为什么 value 用 unknown 而不是 any】
+//   unknown = 「我知道这里有个值，但还不知道它是什么形状」。
+//   它比 any 严格得多：any 会让 TypeScript 彻底放弃对这个值的检查
+//   （any 传染一片，出了错要运行时才发现）；
+//   unknown 则会**强制你在用之前先判断类型**（比如 if (typeof v === 'string')）。
+//
+//   之所以用 unknown，是因为访谈问题的答案形态本来就不固定：
+//   可能是单选（字符串）、多选（字符串数组）、开关（布尔）、自由输入（长文本）。
+//   一刀切成 string 会骗人，写 any 又会丢掉所有保护。
+//
+//   打个比方：unknown 像是「一个贴了『待鉴定』标签的箱子」——
+//   你可以先搬走，但打开之前必须先看清楚里面是什么。
+/** 访谈阶段采集到的一条需求。
+ *
+ * 只增不改：访谈是「用户到底点了什么」的审计轨迹，不允许事后编辑。
+ */
 export interface InterviewAnswer {
-  /** Stable field id (e.g. "name", "mainFeature"). */
+  /** 问题的稳定 id，例如 "mainFeature"，用当前置词做键 */
   field: string
-  /** Free-form value the user gave during the interview. */
+  /** 用户点选的选项文案；用 unknown 是因为选项形态不固定 */
   value: unknown
-  /** When this answer was captured (ISO timestamp). */
+  /** 记录时间，ISO 8601 字符串，可直接 JSON 序列化 */
   capturedAt: string
 }
 
-/** Snapshot of a single workshop project. Serializable to JSON. */
+
+// ############################################################################
+// 六、Project：单个项目的完整快照
+// ############################################################################
+//
+// 这是落盘的主结构，最终被写成 <projectsDir>/<pluginName>/project.json。
+//
+// 【加字段前必须确认的两件事】
+//   ① 能 JSON 序列化（不能塞函数、Date 对象、Map 之类）
+//      为什么？因为 store 用「写临时文件 + 改名」的原子写法保存它，
+//      而临时文件写的就是 JSON 文本。塞不进 JSON 的东西会直接丢。
+//   ② Client 那边能显示
+//      为什么？因为这个对象要跨 Host ↔ Client 的 Remote 边界完整传过去，
+//      收不到就等于字段白加。
+//
+// 【关于 ISO 8601 时间字符串】
+//   格式长这样：2026-10-03T18:04:22.913Z
+//   为什么不用 Date 对象？因为 Date 不能直接 JSON 序列化
+//   （会变成一个数字时间戳），而且带时区信息容易在往返中丢精度。
+//   存字符串最省心，读回来时 new Date(字符串) 就能还原。
+/** 单个工坊项目的完整快照，落盘位置是
+ *  `<projectsDir>/<pluginName>/project.json`。
+ *
+ * 每个字段都必须能 JSON 序列化 —— Client 端要跨 Remote 边界收到完全相同的结构。
+ */
 export interface Project {
+  /** 创建时分配的 UUID。改名也不会变，可以当稳定主键用 */
   id: string
-  /** Display name chosen at creation time; becomes the plugin's `name`. */
+  /** 创建时定的名字，同时就是磁盘上的目录名 */
   pluginName: string
-  /** Fuzzy one-liner the user wrote to start the workshop. */
+  /** 用户开场那句话，比如「我想看到 NAS 健康状态」 */
   fuzzyIdea: string
-  /** Current stage the project is on. */
+  /** 当前停在哪道工序 */
   stage: Stage
-  /** Whether the user has approved the current stage's deliverable. */
+  /** 当前这道工序的交付物用户是否已认可 */
   accepted: boolean
+  /** 创建时间，ISO 字符串 */
   createdAt: string
+  /** 最后修改时间，ISO 字符串；列表排序就靠它 */
   updatedAt: string
-  /** Accumulated answers gathered during the interview stage. */
+  /** 访谈阶段累积的所有回答，只增不改 */
   interview: InterviewAnswer[]
-  /** Free-form design notes captured at stage 2. */
+  /** 第 2 道工序存的设计稿，自由文本 */
   design: string
-  /** Free-form task list captured at stage 3. */
+  /** 第 3 道工序存的任务清单，自由文本 */
   tasks: string
-  /** Stage-by-stage view (used by the progress strip). */
+  /** 进度条状态数组，由 buildInitialStages 初始化、由 advance 推进 */
   stages: StageView[]
 }
 
-/** Compact row used in the project list. */
+
+// ############################################################################
+// 七、ProjectMeta：列表页用的精简行
+// ############################################################################
+//
+// 【为什么不直接用 Project 画列表页】
+//   和 Project 的区别：砍掉了体积大又不影响列表渲染的字段
+//   （interview / design / tasks 这三样自由文本可能有几十 KB）。
+//   列表页要一次画 N 行，每行都带上全文会浪费内存，也会拖慢跨进程传输。
+//   所以专门定义一个「瘦版」，只留列表真正要显示的字段。
+//
+//   ⚠️ 代价是：以后 Project 加字段时，要记得判断
+//   「这个字段列表页需不需要」，需要就同步加到 ProjectMeta。
+/** 列表页用的精简行 = {@link Project} 砍掉重量级自由文本字段。
+ *  列表页要一次画 N 行，每行都带上完整内容会很浪费。
+ */
 export interface ProjectMeta {
+  /** 同 Project.id */
   id: string
+  /** 同 Project.pluginName */
   pluginName: string
+  /** 同 Project.stage */
   stage: Stage
+  /** 同 Project.accepted */
   accepted: boolean
+  /** 同 Project.createdAt */
   createdAt: string
+  /** 同 Project.updatedAt */
   updatedAt: string
 }
 
-/** Inputs for creating a brand-new project from a fuzzy idea. */
+
+// ############################################################################
+// 八、FuzzyIdea：创建项目时的入参
+// ############################################################################
+//
+// 「Fuzzy」是「模糊」的意思 —— 呼应字段名 fuzzyIdea：
+// 用户开场只给一句大概的想法，具体的要靠后面的访谈工序去问清楚。
+//
+// 【这个类型存在的意义】
+//   它是 store.create() 这个**公开方法的入参形状**。
+//   写成独立的类型，好处是「创建项目需要什么」这件事在文件里一目了然，
+//   而且万一以后要加一个可选参数，改这里一处就够。
+/** 用一句话需求创建新项目时的入参。
+ */
 export interface FuzzyIdea {
+  /** 要用的插件名，会被当目录名，必须过 isValidPluginName */
   pluginName: string
+  /** 用户的模糊需求原话 */
   fuzzyIdea: string
 }
 
-/** Result of advancing a project past a user gate. */
+
+// ############################################################################
+// 九、AdvanceDecision：推进决策
+// ############################################################################
+//
+// 【函数签名怎么读】
+//   在 store.ts 里它长这样：
+//       advance(key: string, decision: AdvanceDecision): Promise<AdvanceResult>
+//                 └── 参数1：项目键        └── 参数2：这个类型   └── 返回值
+//   括号里是「进去什么」，箭头后面是「出来什么」。
+/** 推进决策：往前走一道（`accept`），还是原地返工（`revise`）。
+ */
 export interface AdvanceDecision {
-  /** 'accept' = move to next stage; 'revise' = stay and add feedback. */
+  // accept = 往前走一道；revise = 原地不动，带反馈返工。
   decision: 'accept' | 'revise'
-  /** Optional user feedback text for the revise branch. */
+  /** 可选：revise 时用户说的问题描述（目前不落盘，见 store.ts） */
   feedback?: string
 }
 
-/** What we hand to the page after a stage transition. */
+
+// ############################################################################
+// 十、AdvanceResult：推进后的回执
+// ############################################################################
+//
+// 「回执」= 操作完成之后返回给调用方的结果。
+// store.advance() 改完盘之后，把这些信息交给 Chat 工具 / Client 页面去用。
+//
+// 【awaitingGate 为什么要单独返回一遍】
+//   因为调用方需要立刻知道「接下来要不要给用户显示『继续』按钮」，
+//   而从 project.stages 里现场找那一格很啰嗦。
+//   直接返回一个布尔值，调用方一行代码就能判断。
+/** 工序切换完成后 store 返回给调用方的东西。
+ *  `awaitingGate` 为 true 表示刚落到的这道工序还需要用户点一下。
+ */
 export interface AdvanceResult {
+  /** 推进之后的完整项目对象 */
   project: Project
+  /** 推进之后所在的新工序 */
   nextStage: Stage
-  /** Whether the project still has the next user gate ahead. */
+  // true = 刚落到的这道工序还需要用户点一下才能继续。
+  // Client 拿它决定要不要显示「继续」按钮。
   awaitingGate: boolean
 }
 
-/** Lightweight validation helper exposed for tests. */
+
+// ############################################################################
+// 十一、isValidPluginName：插件名校验（同时也是安全边界）
+// ############################################################################
+//
+// 这个函数看着只是校验命名风格，实际上它是**路径穿越的防线**：
+// pluginName 会被 store 直接 join（拼接）到项目根目录上。如果它能包含
+// `/` 或 `..` 之类的字符，一个叫 "../../.ssh" 的名字就能把文件写到项目根之外。
+//
+// 把校验集中在这里，所有调用方（store 的每个公开方法）就都免费拿到了这层保证。
+//
+// 【函数签名怎么读】
+//   isValidPluginName(name: string): boolean
+//                   └── 参数：待检查的名字    └── 返回值：合不合法
+//
+// 【true / false 的含义】
+//   谓词（返回布尔值的函数）的命名惯例是以 is / has 开头，
+//   返回 true 表示「符合」，false 表示「不符合」。
+//
+// 【正则 `/^[a-z][a-z0-9-]*[a-z0-9]$/` 逐段拆解】
+//   开头的 / 和结尾的 /  = 正则表达式的分隔符，里面的内容是规则本身
+//   ^  = 锚点，要求**从这里开始**（否则 "xx-foo" 这种前面带别的东西也会通过）
+//   [a-z]  = 一个小写字母
+//   [a-z0-9-]  = 一个小写字母、数字或连字符（连字符写在最后，避免被当成范围符号）
+//   *  = 前面这一组**重复 0 次或多次**
+//   [a-z0-9]  = 再要一个小写字母或数字
+//   $  = 锚点，要求**到这里结束**
+//
+//   合起来读：「小写字母开头 → 若干个小写字母/数字/连字符 → 以小写字母或数字结尾」。
+//   最后那条 [a-z0-9]$ 是专门用来挡 "trailing-" 这种以连字符结尾的。
+//
+//   举例：
+//     "foo-bar"  → ✅ a 开头，中间的 - 合法，以 r 结尾
+//     "-leading" → ❌ 第一个字符是 - 不是小写字母
+//     "trailing-"→ ❌ 最后一个字符是 - 不是字母或数字
+//     "Has-Caps" → ❌ H 是大写
+/** 磁盘上项目键的校验器，它同时就是目录名。
+ *
+ * 这是一条**安全边界**：名字会被 `CraftStore.dirFor()` 直接拼到项目根目录上，
+ * 所以一个含 `/` 或 `..` 的名字就能让项目读写到配置根目录之外。
+ *
+ * 规则：2~63 个字符；小写字母开头；小写字母或数字结尾；
+ *      中间只能是小写字母 / 数字 / 连字符。
+ */
 export function isValidPluginName(name: string): boolean {
-  // Lowercase letter start, lowercase letter or digit end, internal can have
-  // lowercase letters / digits / dashes; total length 2-63.
+  // 先卡长度：2 个字符起、63 个字符封顶。名字太短没意义，太长在某些文件系统上有麻烦。
   if (name.length < 2 || name.length > 63) return false
+  // 形状规则：小写字母开头 → 中间只能是小写字母/数字/连字符 → 结尾必须是小写字母或数字。
+  // 最后一条 `[a-z0-9]$` 是专门用来挡 "trailing-" 这种以连字符结尾的。
   return /^[a-z][a-z0-9-]*[a-z0-9]$/.test(name)
 }
 
-/** Build a default stages view for a freshly created project. */
+
+// ############################################################################
+// 十二、buildInitialStages：给新项目铺一条初始进度条
+// ############################################################################
+//
+// 【map 是什么】
+//   Array.prototype.map = 「把数组里的每一项，都按某个规则变成新的一项，
+//   返回一个新数组」。原数组不动。
+//   举例：[1,2,3].map(x => x * 2) → [2,4,6]
+//
+// 【回调函数里的两个参数】
+//   STAGE_ORDER.map((stage, index) => ({ ... }))
+//                 │       │      └── 返回值：这一格的新内容
+//                 │       └───────── index：这一项在原数组里的下标（0,1,2…）
+//                 └───────────────── stage：这一项的值本身（'interview' 等）
+//
+// 【返回类型 StageView[]】
+//   冒号后面写的是「这个函数会返回什么」。这里返回 6 个 StageView 组成的数组，
+//   正好铺满整条进度条。
+//
+// 【为什么只有第 1 道是 gate】
+//   因为所有新项目都落在访谈这一道，而访谈是关卡（要用户点）。
+//   后面的工序先摆成 pending，等 store.advance() 把项目推进到它时，
+//   才会按 isAutoStage() 的判定改成 auto 或 gate。
+/** 给刚创建的项目铺一条默认进度条：第 1 道是 `gate`（关卡），
+ *  后面的全是 `pending`（还没走到）。
+ */
 export function buildInitialStages(): StageView[] {
+  // 把 STAGE_ORDER 每一项都变成一格。index 是这道工序在顺序表里的下标。
   return STAGE_ORDER.map((stage, index) => ({
-    stage,
-    // First stage is awaiting the user (gate); the rest are pending until
-    // we reach them. AUTO stages (tasks / generate / verify) are auto-marked
-    // 'auto' once they begin, by the advance logic.
+    stage, // 这一格是哪道工序
+    // 只有第 1 道（index === 0）开局就是关卡，因为所有新项目都落在访谈这一道。
+    // 后面的工序先摆成 pending，等 store.advance() 把项目推进到它时，
+    // 才会按 isAutoStage() 的判定改成 auto 或 gate。
     status: index === 0 ? 'gate' : 'pending',
   }))
 }

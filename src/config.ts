@@ -1,21 +1,120 @@
+﻿// ============================================================================
+// src/config.ts —— 插件的可调参数
+// ============================================================================
+
+// ############################################################################
+// 引入模块
+// ############################################################################
+//
+// 【先搞懂 import 的语法】
+//
+//   import 名字 from '模块名'
+//    │        │              │
+//    │        │              └── 从哪个模块拿
+//    │        └───────────────── 拿什么（这里不用 {}，说明是「默认导出」）
+//    └────────────────────────── 「引入」命令
+//
+// 注意这里**没有 {}**。有两种引入方式：
+//   · import { a, b } from 'x'  → 拿模块里的具名成员（要指定名字）
+//   · import 名字 from 'x'      → 拿模块的「默认导出」（不用指定名字）
+//   Schemastery 的 Schema 既是类型、又是值，所以用默认导入最方便。
+//
+// -----------------------------------------------------------------------------
+// 引入：@deepseek-ai/schemastery 的 Schema
+// -----------------------------------------------------------------------------
+//   @deepseek-ai/schemastery = 官方的「配置声明 + 校验」库。
+//   （@deepseek-ai/ 是官方包的组织名；schemastery 意思是「schema 工具箱」）
+//
+//   · Schema = 这个库的核心对象，用来「声明并校验」配置数据。
+//   打个比方：普通的 TypeScript 类型 `interface { a: number }` 只是「说明文档」，
+//   编译完就没了，运行时不管。而 Schema 是一个*真正的检查机器*：
+//   你声明「a 必须是数字且不能小于 1」，它就真的会在运行时拦住不合法的值。
+//   这一点对插件特别重要：用户会在 cordis.patch.yml 里手写配置，
+//   写错了必须在「加载那一刻」就报错，而不是等到某个工具被调用时才炸。
 import Schema from '@deepseek-ai/schemastery'
 
-// Tunable configuration must be a Schemastery Schema, never a plain object:
-// the harness validates it at load time and fails loud on invalid values, and
-// every key can be changed from cordis.yml without editing code (guide §3.6).
+// ############################################################################
+// Config 接口：config 块的「形状说明书」
+// ############################################################################
+//
+// 【什么是 interface】
+//   interface 是 TypeScript 的一种「类型定义」，用来说明一个对象
+//   应该有哪些字段、每个字段是什么类型。它是*纯说明文档*，编译后什么都不剩。
+//   打个比方：像一张商品标签模板——上面写着「名称、产地、规格」，
+//   标签本身不是商品，只是对商品的描述。
+//   这一段只给开发者看（IDE 提示、类型检查用），运行时不存在。
+/** cordis.patch.yml 里 `dsh-plugin-craft` 那一行的 `config` 块的形状。
+ * ⚠️ 覆盖规则：用户在 profile 里按 `id` 覆盖 bundle 行时，是**整块替换**
+ * config，不做深合并。所以覆盖方必须把它需要的键全部重写一遍，
+ * 漏掉的会回落到下面的默认值，而不是 bundle 里原来配的那个值。 */
 export interface Config {
-  /** Workspace-relative (or absolute) directory holding workshop projects. */
+  // 工坊项目存放的目录。可以是相对 DSH 根目录的相对路径，也可以是绝对路径。
   projectsDir: string
-  /** Cap on auto-retained projects listed in the UI; older ones stay on disk. */
+  // 列表页最多显示几个项目。超出部分不删盘，只是排在后面不显示。
   maxListedProjects: number
 }
 
+// ############################################################################
+// Config 常量：真正的运行时 schema
+// ############################################################################
+//
+// 【Schema<Config> 里的尖括号是什么意思】
+//   泛型参数。意思是「造出来的这个校验机器，专门用来校验 Config 这种形状」。
+//   这样 TS 就能保证你后面写的默认值和字段名跟上面的接口对得上；
+//   写错字段名会直接报错。
+// 【为什么必须是一个 Schema 对象，不能写普通对象】
+//   宿主在加载插件时会调用它来校验配置。配置写错会在「加载那一刻」
+//   直接响亮报错，而不是拖到运行时变成一个费解的错误。
+// 【链式调用是什么】
+//   Schema 的每个方法都返回「自己」，所以可以一路点下去：
+//       Schema.number()        造一个「必须是数字」的规则
+//            .default(50)      再加一条「默认给 50」
+//            .min(1)           再加一条「不能小于 1」
+//            .description('…') 再加一条「说明文字」
+//   这是 JavaScript 里很常见的「链式 API」写法。
+/** 运行时 schema 对象。宿主在加载插件时调用它校验配置。
+ * 必须是一个 Schema 对象，不能写普通对象——这样配置写错会在「加载那一刻」
+ * 直接响亮报错，而不是拖到运行时变成一个费解的错误。 */
 export const Config: Schema<Config> = Schema.object({
+
+  // ---- projectsDir ----
+  // Schema.object({...}) = 声明「配置是一个对象，里面有这些字段」
+  // Schema.string()      = 造一个「必须是字符串」的校验规则
   projectsDir: Schema.string()
-    .default('projects/dsh-plugin-craft')
+    // .default(x) = 用户没填这一项时用它。加载期就会被填上，
+    //                所以代码里拿到的一定是字符串，不会是 undefined。
+    .default('C:\\Users\\Administrator\\.dsh\\myfile')
+    // .description(s) = 说明文字。它会出现在 `dsh --dump-config` 的输出里，
+    //                   是给用户看的，所以这是*面向用户的文档*不是注释。
     .description('Directory holding workshop projects, resolved relative to the DSH home.'),
+
+  // ---- maxListedProjects ----
+  // Schema.number() = 造一个「必须是数字」的校验规则
   maxListedProjects: Schema.number()
-    .default(50)
+    .default(50) // 默认显示 50 个
+    // .min(1) = 数值下限。下限设 1 是为了防止有人配成 0，
+    //           导致一个项目都看不见却毫无报错。
     .min(1)
     .description('Maximum number of projects listed in the Workshop UI before older ones roll off.'),
 })
+
+// ############################################################################
+// 覆盖规则提醒（本文件最容易踩的坑）
+// ############################################################################
+//
+// 写在 cordis.patch.yml 里的 config 会被宿主读取，规则是：
+//   **按 id 整行替换 config，不做深合并。**
+//
+// 举个例子。bundle 里配的是：
+//     projectsDir: 'C:\Users\Administrator\.dsh\myfile'
+//     maxListedProjects: 50
+//
+// 用户在自己的 profile 里只想改 projectsDir，如果只写：
+//     projectsDir: 'D:/my-projects'
+//
+// 结果是**maxListedProjects 也会一起被替换掉**，
+// 回落成 schema 的默认值——恰好也是 50，看不出问题；
+// 但如果以后默认值改成 30，用户就会莫名其妙变成 30。
+//
+// 正确做法：想改哪个就**所有**键都重写一遍。
+// 漏掉的键会回落到下面的默认值，而不是 bundle 里原来配的那个值。

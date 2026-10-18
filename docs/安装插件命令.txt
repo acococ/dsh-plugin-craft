@@ -1,5 +1,5 @@
 ================================================================
-  dsh-plugin-craft v0.3.3 — 安装 / 更新 / 卸载 / 打包
+  dsh-plugin-craft v0.3.5 — 安装 / 更新 / 卸载 / 打包
   仓库: https://github.com/acococ/dsh-plugin-craft.git
   DSH 默认 web profile: http://127.0.0.1:3080
 ================================================================
@@ -9,11 +9,11 @@
 ────────────────────────────────────────────────────────────────
   从本地 tarball 安装（推荐，离线、版本固定、不触发 prepare）:
 
-      dsh plugin --profile web add "C:\Users\Administrator\.dsh\projects\dsh-plugin-craft\dsh-plugin-craft-0.3.3.tgz"
+      dsh plugin --profile web add "C:\Users\Administrator\.dsh\projects\dsh-plugin-craft\dsh-plugin-craft-0.3.5.tgz"
 
   从 GitHub 直接装（会拉源码并跑 prepare，请先确认 pnpm ≥10):
 
-      dsh plugin --profile web add "github:acococ/dsh-plugin-craft#v0.3.3"
+      dsh plugin --profile web add "github:acococ/dsh-plugin-craft#v0.3.5"
 
   从 GitHub 装最新版:
 
@@ -72,7 +72,7 @@
   git add package.json cordis.patch.yml README.md README-zh.md src\ lib\ tests\ locale\ tsconfig.json tsdown.config.mjs vitest.config.ts LICENSE icon.svg USAGE.md 安装插件命令.txt pnpm-lock.yaml pnpm-workspace.yaml
 
   git commit -m "更新: <本次改动一句话描述>"
-  git tag v0.3.3
+  git tag v0.3.5
   git push origin main --tags
 
 ────────────────────────────────────────────────────────────────

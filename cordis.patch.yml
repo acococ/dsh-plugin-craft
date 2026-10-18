@@ -40,17 +40,18 @@
 #   5. The assistant never installs the produced plugin into the current
 #      profile; the user installs it manually via dsh plugin add.
 
-- id: dsh-plugin-craft
-  # The host row. Hosts `ctx.craft` (the CraftStore) and the three Chat
-  # tools. Loaded automatically by every Agent on the profile.
-  name: dsh-plugin-craft
-  config:
-    # Where workshop projects are written on disk. Resolved relative to
-    # the DSH home at apply time; overridable from the profile cordis.patch.yml.
-    projectsDir: 'projects/dsh-plugin-craft'
-    # Cap on auto-retained projects; older ones stay on disk but stop
-    # showing in the UI listing.
-    maxListedProjects: 50
+- insert:
+    - id: dsh-plugin-craft
+      # The host row. Hosts `ctx.craft` (the CraftStore) and the three Chat
+      # tools. Loaded automatically by every Agent on the profile.
+      name: dsh-plugin-craft
+      config:
+        # Where workshop projects are written on disk. Resolved relative to
+        # the DSH home at apply time; overridable from the profile cordis.patch.yml.
+        projectsDir: 'C:\Users\Administrator\.dsh\myfile'
+        # Cap on auto-retained projects; older ones stay on disk but stop
+        # showing in the UI listing.
+        maxListedProjects: 50
 
 # Insert the preset row after the host row. The presets array only
 # references shipped `@deepseek-ai/*` packages — never this bundle itself
