@@ -1,30 +1,55 @@
 # dsh-plugin-craft v0.3.5 — 2026-10
 
-> **DSH Plugin Workshop** — 兼容 DSH 主体 0.2.1-alpha.1 的 patch 版。
+> **DSH Plugin Workshop** — 把 Chat 变成"五阶段引导式对话",让不会写代码的人用自然语言
+> 描述需求,DSH 自动完成需求采集 → 设计 → 拆任务 → 生成代码 → 验证。
 
 ---
 
 ## ✨ 这个版本是什么
 
-v0.3.5 是纯兼容性 patch，**代码无行为变更**。
+v0.3.5 是**大版本**:接入了完整的五阶段工坊流程,并在发布前做了一轮可移植性与依赖区间的修正。
 
-仅放宽 `peerDependencies` 的版本上限，让本插件能被运行在 DSH `0.2.x` 系列宿主上的 `dsh plugin add` 命令接受。
+上一个 tag 是 `v0.3.3`,因此下面按 `v0.3.3 → v0.3.5` 汇总。
 
-| ---------------- | ------------------------ |
-| ---------------- | ------------------------ |
-| **Harness 兼容** | `0.1.7-rc.2` 或更高，含 `0.2.0-rc.x` / `0.2.1-alpha.1` |
-| **行为变化**     | 无（与 v0.3.4 完全一致）   |
-| **Node**         | `^22.19.0` 或 `>=24.0.0` |
-| **平台**         | Windows / macOS / Linux  |
-| **License**      | Apache-2.0               |
+| ---------------- | ---------------------------------------------------------------- |
+| ---------------- | ---------------------------------------------------------------- |
+| **Harness 兼容** | `0.1.7-rc.2` 或更高,含 `0.2.0-rc.x` / `0.2.1-alpha.1`              |
+| **行为变化**     | 有 —— 新增五阶段工坊;`projectsDir` 默认落盘位置改为可移植相对路径    |
+| **Node**         | `^22.19.0` 或 `>=24.0.0`                                            |
+| **平台**         | Windows / macOS / Linux                                             |
+| **License**      | Apache-2.0                                                         |
 
 ---
 
-## 🔧 这个版本改了什么 (0.3.4 → 0.3.5)
+## 🔧 这个版本改了什么
 
-### 改动 1：`package.json` peerDependencies 放宽
+### 改动 0:五阶段工坊落地(本次主体)
 
-**之前（v0.3.4）**：
+插件从"能创建项目"升级为**完整的引导式工作流**。Chat 里的 preset 选择器会出现一个叫
+**「插件工坊」**(`id: craft`)的预设,选上它,Chat 会以"插件工坊主持人"人格重新加载会话:
+
+| # | 阶段     | 用户要做什么 | 工坊做什么                             |
+| - | -------- | ------------ | -------------------------------------- |
+| 1 | 采访     | 点选项卡答 5-7 题 | 答案落到 `01-interview.md`             |
+| 2 | 设计     | 审阅骨架     | 起草 `02-design.md`                    |
+| 3 | 拆任务   | 不需要       | 拆成 DAG,写出 `03-tasks.md`           |
+| 4 | 生成代码 | 审阅 DAG     | 队长派团队写源码与配置                 |
+| 5 | 验证     | 不需要       | check --strict + 冒烟 + **实机安装验收** |
+
+实现要点:
+
+- `src/{index,store,types,config}.ts` —— `CraftStore` 落盘层 + `craft.create_project` /
+  `appendinterview` / `advance_stage` 三个 Chat 工具
+- `tests/store.test.ts` —— 8 个 store 用例
+- `cordis.patch.yml` 的 `preset-craft` 显式接入 `dsh-agent-teams` / `dsh-plugin-guide` /
+  `dsh-tool-bash`,让阶段 3/4/5 具备拆任务、读开发 skill、执行命令的能力
+- 阶段 5 拆成四道关卡:静态红线 → 装包冒烟 → **实机安装验收**(装进一次性临时 profile 真跑,
+  抓运行时 BUG)→ 需求覆盖。**绝不自动 install 到当前 profile**
+- 新增 `docs/构建产物注解/` 与 `*.annotated.jsonc` 注解产物,把构建结果逐行注释出来
+
+### 改动 1:`package.json` peerDependencies 放宽
+
+**之前（v0.3.3）**：
 
 ```jsonc
 "@deepseek-ai/dsh-tools": ">=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0 || >=0.1.6-0 <0.2.0 || >=0.1.7-0 <0.2.0"
@@ -36,26 +61,47 @@ v0.3.5 是纯兼容性 patch，**代码无行为变更**。
 "@deepseek-ai/dsh-tools": ">=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0 || >=0.1.6-0 <0.2.0 || >=0.1.7-0 <0.2.0 || >=0.2.0-0 <0.3.0 || >=0.2.1-0 <0.3.0"
 ```
 
-新增 `0.2.0-*` / `0.2.1-*` 两个区间，让插件能装在 0.2.x 宿主上（dsh 在安装时会校验 peer 范围，范围停在 0.1.x 会被直接拒收）。
+新增 `0.2.0-*` / `0.2.1-*` 两个区间,让插件能装在 0.2.x 宿主上(dsh 在安装时会校验 peer 范围,范围停在 0.1.x 会被直接拒收)。
 
-> ⚠️ 每个预发布元组必须单独一段：semver 的预发布规则要求区间里存在**同一个
-> [主.次.修] 元组**的带预发布比较器，`0.1.6-0` / `0.1.7-0` 光靠
-> `>=0.1.2-rc.1` 一段是匹配不上的。整串范围由 `dsh-plugin-dev check` 写死校验，
+> ⚠️ 每个预发布元组必须单独一段:semver 的预发布规则要求区间里存在**同一个
+> [主.次.修] 元组**的带预发布比较器,`0.1.6-0` / `0.1.7-0` 光靠
+> `>=0.1.2-rc.1` 一段是匹配不上的。整串范围由 `dsh-plugin-dev check` 写死校验,
 > 必须逐字照抄。
 
-### 改动 2：`src/index.ts` 加注释
+### 改动 2:发布前的可移植性修正
 
-在 `apply()` 的「把 store 挂到 ctx 上」区块新增一段 ⚠️ 注释，明确说明：
+`projectsDir` 的默认值此前被写死成作者本机的绝对路径(`C:\Users\<某人>\...`)。
+这对**公开分发**的插件是实打实的缺陷:任何其他用户装上后,工坊都会往一个他机器上
+根本不存在的目录写数据。现已改为:
 
-> DSH 0.2.0+ 的依赖是**运行时解析 + 运行时卸载**（v0.1.6-alpha.2 引入，v0.2.1-alpha.1 修复了 HMR 下残留依赖映射）。所以 store **必须**挂到 `ctx.effect()` 里 —— 否则 `dsh web` 重载本插件时旧 store 会泄漏。
+- 默认值改为相对路径 `workshop/projects` → 落在 `<DSH_HOME>/workshop/projects/`
+  (既不污染 `<DSH_HOME>/projects/` 里的插件源码 checkout 区,也不在 `~/.dsh` 根)
+- `src/index.ts` 的相对路径基准从 `process.env.DSH_HOME || '.'` 改为
+  `process.env.DSH_HOME || join(homedir(), '.dsh')`,与官方 `dsh-home-paths` 的解析顺序
+  (显式配置 > `$DSH_HOME` > `~/.dsh`)保持一致 —— 退成 `'.'` 会落到进程 CWD,
+  同一份配置在不同机器/不同启动方式下写到不同地方
 
-本插件原本就用了 `ctx.effect(() => ctx.provide('craft', store), 'dsh-plugin-craft: store')`，**不需要改代码**；注释只是给未来维护者看。
+> 自定义落盘位置:在 profile 的 `cordis.patch.yml` 里按 `id` 覆盖 `dsh-plugin-craft` 行的
+> `config`。注意 profile 覆盖是**整块替换 config,不做深合并**,两个键要一起写。
 
-### 改动 3：README 兼容性行
+### 改动 3:`src/index.ts` 加注释
 
-README 顶部 `> 当前版本：v0.3.5` 下方新增一行：
+在 `apply()` 的「把 store 挂到 ctx 上」区块新增一段 ⚠️ 注释,明确说明:
 
-> **DSH 兼容性**：≥ `0.1.7-rc.2`，含 `0.2.0-rc.x` / `0.2.1-alpha.1` 全部已发布版本。
+> DSH 0.2.0+ 的依赖是**运行时解析 + 运行时卸载**(v0.1.6-alpha.2 引入,v0.2.1-alpha.1 修复了 HMR 下残留依赖映射)。所以 store **必须**挂到 `ctx.effect()` 里 —— 否则 `dsh web` 重载本插件时旧 store 会泄漏。
+
+本插件原本就用了 `ctx.effect(() => ctx.provide('craft', store), 'dsh-plugin-craft: store')`,**不需要改代码**;注释只是给未来维护者看。
+
+### 改动 4:README 兼容性行
+
+README 顶部 `> 当前版本：v0.3.5` 下方新增一行:
+
+> **DSH 兼容性**:≥ `0.1.7-rc.2`,含 `0.2.0-rc.x` / `0.2.1-alpha.1` 全部已发布版本。
+
+### 改动 5:编码修复
+
+修复 UTF-8 被按 GBK 读回导致的换行丢失:`src/config.ts` 的 import 与两处 Schema 字段曾被并入
+`//` 注释,`tsc` 报 20 个语法错误;README / USAGE / 注解产物的中文一并还原。
 
 ---
 
@@ -102,9 +148,13 @@ dsh --profile web
 
 浏览器 `Ctrl + Shift + R` 硬刷新一次（让 `__DSH_BOOT__` 拉新入口）。
 
-### 从 v0.3.4 升级
+### 从 v0.3.3 升级
 
 不需要先卸载。`dsh plugin --profile web add` 会就地覆盖。
+
+> ⚠️ 落盘位置变了:v0.3.5 的 `projectsDir` 默认值改为 `<DSH_HOME>/workshop/projects/`。
+> 旧版本建的项目不在这个目录下,需要在 profile 的 `cordis.patch.yml` 里把
+> `dsh-plugin-craft` 行的 `config.projectsDir` 覆盖回旧路径,或手动把旧数据目录搬过去。
 
 ### 从 ≤ v0.3.0（含 Web 侧边栏版本）升级
 
@@ -126,12 +176,14 @@ dsh plugin --profile web add "C:\path\to\dsh-plugin-craft-0.3.5.tgz"
 
 ## 🛠 质量门禁
 
-| 检查             | 结果                                           |
-| ---------------- | ---------------------------------------------- |
-| `tsc --noEmit`   | ✅ exit 0                                      |
-| `pnpm test`      | ✅ 8/8 pass                                    |
-| `pnpm run build` | ✅ `lib/index.{mjs,d.mts}`                     |
-| `pnpm pack`      | ✅ tarball 含 10 文件，~10 KB+                 |
+| 检查                        | 结果                                     |
+| --------------------------- | ---------------------------------------- |
+| `tsc --noEmit`              | ✅ exit 0                                |
+| `pnpm test`                 | ✅ 8/8 pass                              |
+| `pnpm run build`            | ✅ `lib/index.{mjs,d.mts}`                |
+| `dsh-plugin-dev check --strict` | ✅ `result: OK (9 passed, 0 failed)` |
+| `dsh --profile web --dump-config` | ✅ 配置行正确组合加载                |
+| `pnpm pack`                 | ✅ tarball 含 10 文件，~10 KB+           |
 
 ---
 
