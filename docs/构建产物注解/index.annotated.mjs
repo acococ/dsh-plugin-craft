@@ -42,6 +42,16 @@
 import { dirname, join, resolve } from "node:path";
 
 // -----------------------------------------------------------------------------
+// node:os — Node.js 内置的「操作系统信息」模块
+// -----------------------------------------------------------------------------
+//   · homedir — 拿当前用户的家目录（Windows: C:\Users\<你>，macOS/Linux: /home/<你>）
+//     用在哪：DSH_HOME 没设时的兜底。
+//     官方 dsh-home-paths 的解析顺序是「显式配置 > $DSH_HOME > ~/.dsh」，
+//     所以这里必须拼出同一个 ~/.dsh，不能退成进程当前目录（那样相对路径会跟着
+//     启动位置漂移，同一份配置在不同机器/不同启动方式下落到不同地方）。
+import { homedir } from "node:os";
+
+// -----------------------------------------------------------------------------
 // @deepseek-ai/dsh-tools —?官方「工具定义」库
 // -----------------------------------------------------------------------------
 //   一?Chat 工具 = 一份「说明书 + 一个执行函数」?//   模型读说明书决定**什么时候调**?*怎么传参**，然?Node 调执行函数干活?//
@@ -89,10 +99,10 @@ import { randomUUID } from "node:crypto";
 // 【Schema.object({...}) = 声明「配置是一个对象，里面有这些字段」?
 const Config = Schema.object({
 	// projectsDir 字段：Schema.string() = 造一个「必须是字符串」的校验规则?	// 【链式调用是什么】Schema 的每个方法都返回「自己」，所以能一路点下去?	//   .default(x)      = 用户没填时用它，加载期就填上，所以代码里拿到的一定是字符?	//   .min(1)          = 数值下限。设 1 是防止有人配?0，导致一个项目都看不见却毫无报错
-	//   .description(s) = 说明文字，会出现?`dsh --dump-config` 输出?	// ⚠️ 这里?.description(...) ?*面向用户的文?*，不是注释，所以是英文?	//    而且绝对不能翻译 —?它是功能字符串，改了就是改功能?	// ⚠️ 注意：源码里这条链式调用?*换行写的**（每步一行）?	//    产物里被压成了一?—?换行和缩进在运行时毫无意义，打包器顺手去掉了?	projectsDir: Schema.string().default("C:\Users\Administrator\.dsh\myfile").description("Directory holding workshop projects, resolved relative to the DSH home."),
+	//   .description(s) = 说明文字，会出现?`dsh --dump-config` 输出?	// ⚠️ 这里?.description(...) ?*面向用户的文?*，不是注释，所以是英文?	//    而且绝对不能翻译 —?它是功能字符串，改了就是改功能?	// ⚠️ 注意：源码里这条链式调用?*换行写的**（每步一行）?	//    产物里被压成了一?—?换行和缩进在运行时毫无意义，打包器顺手去掉了?	projectsDir: Schema.string().default("workshop/projects").description("Directory holding workshop projects, resolved relative to the DSH home."),
  // maxListedProjects 字段：Schema.number() = 造一个「必须是数字」的规则?	//   .default(50) = 默认显示 50 ?
-	projectsDir: Schema.string().default("C:\\Users\\Administrator\\.dsh\\myfile").description("Directory holding workshop projects, resolved relative to the DSH home."),
- maxListedProjects: Schema.number().default(50).min(1).description("Maximum number of projects listed in the Workshop UI before older ones roll off.")
+	projectsDir: Schema.string().default("workshop/projects").description("Directory holding workshop projects, resolved relative to the DSH home."),
+	maxListedProjects: Schema.number().default(50).min(1).description("Maximum number of projects listed in the Workshop UI before older ones roll off.")
 });
 // ⚠️ 注意：`interface Config`（那个说?projectsDir/maxListedProjects 长什么样的类型）
 //    在这?*完全消失?*。因?interface 是「纯类型」，编译后不存在任何代码?//    但它出现?lib/index.d.mts 里（?TS 消费者看）。两者的区别后面细说?
@@ -322,7 +332,10 @@ function isAutoStage(stage) {
 const name = "dsh-plugin-craft";
 const inject = ["tools"];
 function apply(ctx, config) {
-	const projectsDir = config.projectsDir.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(config.projectsDir) ? config.projectsDir : resolve(process.env.DSH_HOME || ".", config.projectsDir);
+	// ⚠️ 打包器把源码里那行「算 dshHome」保留下来了，因为它被下面的 resolve 用到：
+	//    DSH_HOME 没设时兜底成「家目录/.dsh」，和官方 dsh-home-paths 的解析顺序一致。
+	const dshHome = process.env.DSH_HOME || join(homedir(), ".dsh");
+	const projectsDir = config.projectsDir.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(config.projectsDir) ? config.projectsDir : resolve(dshHome, config.projectsDir);
 	store.configure(projectsDir, config.maxListedProjects);
 	ctx.effect(() => ctx.provide("craft", store), "dsh-plugin-craft: store");
 	ctx.tools.register(defineTool({
@@ -509,7 +522,7 @@ export { Config, apply, inject, name };
 
 	/** 接线，由 `apply()` 调用：文件写到哪、列表最多返回几条?	*  *  立刻 resolve 成绝对路径，防止之后有人 `process.chdir()` 把项目搬走?	*/
  // configure(目录, 上限) —?由宿主的 apply() 调用一?
-		// resolve(baseDir) = 把相对路径转成绝对路径?		// 为什么要立刻做？因为 Node 的「当前工作目录」是会变?		//（有人调 process.chdir() 就变了）。存绝对路径就免疫这个问题?		// 例：resolve('C:\Users\Administrator\.dsh\myfile') ?'C:\Users\Administrator\.dsh\myfile' （严对路径下去去，解析出来一样）
+		// resolve(baseDir) = 把相对路径转成绝对路径?		// 为什么要立刻做？因为 Node 的「当前工作目录」是会变?		//（有人调 process.chdir() 就变了）。存绝对路径就免疫这个问题?		// 例：resolve('C:/Users/你/.dsh/workshop/projects') ?'C:\Users\你\.dsh\workshop\projects' （正斜杠进去、反斜杠出来，解析出来一样）
 		// `this` = 「调用这个方法的那个对象」。这里是?new 出来?store 实例?
 
 	// 拼出某个项目的目录，同时做路径穿越防护?	// ⚠️ 源码里是 `private dirFor(...)` —?private 消失了，但方法还在，
@@ -673,9 +686,15 @@ export { Config, apply, inject, name };
 	//          这个正则的意思：一个小写或大写字母 + 冒号 + 一个斜?	//          例：'C:\\Users' ?  'D:/games' ?  'projects/foo' ?	//   A || B = 「看起来是绝对路径?	//
 	//   三元运算符：`条件 ? 是绝对路径就原样?: 否则当成相对路径?resolve`
 	//   条件成立 ?直接用用户写的路?	//   条件不成??第二个参?= resolve(基准目录, 相对路径)
-	//       process.env.DSH_HOME = 读环境变?DSH_HOME（DSH 的数据根目录?	//       || "." = 如果这个环境变量**不存?*（是 undefined），就用 "."（当前目录）
-	//       resolve(".", 'projects/foo') ?把相对路径接到基准目录后?	//   例：DSH_HOME=C:\Users\你\.dsh，配置写 'C:\Users\Administrator\.dsh\myfile'
-	//     ?resolve 之后 = 'C:\\Users\\你\\.dsh\\projects\\dsh-plugin-craft'
+	//       process.env.DSH_HOME = 读环境变?DSH_HOME（DSH 的数据根目录?	//       || join(homedir(), ".dsh") = 如果这个环境变量**不存?*（是 undefined），就用「家目录/.dsh」
+	//       resolve(dshHome, 'workshop/projects') ?把相对路径接到基准目录后?	//   例：DSH_HOME=C:\Users\你\.dsh，配置写 'workshop/projects'
+	//     ?resolve 之后 = 'C:\\Users\\你\\.dsh\\workshop\\projects'
+	//   ⚠️ 为什么不用 "." 兜底？官方 dsh-home-paths 的顺序是「显式配置 > $DSH_HOME > ~/.dsh」，
+	//      退成 "."（进程当前目录）会让相对路径跟着启动位置漂移，
+	//      同一份配置在不同机器/不同启动方式下落到不同地方。
+	//   ⚠️ 为什么默认值必须是相对路径？这是公开分发的插件，写死某台机器的
+	//      绝对路径（如 C:\Users\某人\...）会让所有其他用户都往一个
+	//      他机器上根本不存在的目录里写数据。
 	//
 	//   ⚠️ 为什么要先判断绝对路径？
 	//      因为绝对路径的基准就是它自己?	//      如果不判断硬?resolve('C:\Users\...', 'C:\Users\...')?	//      结果会变?C:\Users\...\C:\Users\... 这种荒唐拼接?	//

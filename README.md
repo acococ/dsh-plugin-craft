@@ -1,4 +1,4 @@
-﻿# dsh-plugin-craft（DSH 插件工坊）
+# dsh-plugin-craft（DSH 插件工坊）
 
 > **DSH Plugin Workshop** — 一个为产品经理设计的 DSH 插件开发引导插件。把 Chat 变成“五阶段引导式对话”，让普通用户**用自然语言**告诉 DSH 想做什么插件，DSH 自动完成需求采集 → 设计 → 任务拆分 → 代码生成 → 验证全过程。
 >
@@ -16,15 +16,16 @@
 
 `dsh-plugin-craft` 是 DeepSeek Harness（DSH）的官方兼容插件。装上之后，在 **DSH Chat 的 preset 选择器**里会出现一个名叫 **「插件工坊」** 的预设。选上它，Chat 会以“插件工坊主持人”人格重新加载会话，引导你完成下面五阶段：
 
-| # | 阶段     | 你要做什么           | 工坊做什么                  |
-| - | -------- | --------------------- | ---------------------------- |
-| 1 | 采访     | 点选项卡答 5-7 题     | 答案落到 `01-interview.md`   |
-| 2 | 设计     | 审阅模块 / patch 骨架 | 起草 `02-design.md`          |
-| 3 | 拆任务  | 不需要               | 拆成 DAG，写出 `03-tasks.md` |
-| 4 | 生成代码 | 不需要               | 写出全套源码与配置          |
-| 5 | 验证     | 不需要               | check --strict + 冒烟测试    |
+| # | 阶段     | 你要做什么            | 工坊做什么                           |
+| - | -------- | --------------------- | ------------------------------------ |
+| 1 | 采访     | 点选项卡答 5-7 题     | 答案落到 `01-interview.md`           |
+| 2 | 设计     | 审阅模块 / patch 骨架 | 起草 `02-design.md`                  |
+| 3 | 拆任务   | 不需要                | 拆成 DAG，写出 `03-tasks.md`         |
+| 4 | 生成代码 | 不需要                | 写出全套源码与配置                   |
+| 5 | 验证     | 不需要                | check --strict + 冒烟 + 实机安装验收 |
 
 完成后工坊交付 `04-implementation/`，**绝不自动 install 到当前 profile** — 是否安装由你决定。
+（阶段 ⑤ 会在一个一次性临时 profile 里把产物真装一遍、把功能真跑一遍，只为抓运行时 BUG；跑完即弃，当前 profile 不受影响。）
 
 ---
 
@@ -142,7 +143,7 @@ dsh --profile web --dump-config | Select-String "dsh-agent-preset|dsh-persona|ds
 ```json
 {
   "@deepseek-ai/cordis": "^4.0.2",
-  "@deepseek-ai/dsh-tools": ">=0.1.2-rc.1 <0.3.0 || >=0.1.5-alpha.1 <0.3.0 || >=0.1.6-0 <0.3.0 || >=0.1.7-0 <0.3.0 || >=0.2.0-0 <0.3.0 || >=0.2.1-0 <0.3.0",
+  "@deepseek-ai/dsh-tools": ">=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0 || >=0.1.6-0 <0.2.0 || >=0.1.7-0 <0.2.0 || >=0.2.0-0 <0.3.0 || >=0.2.1-0 <0.3.0",
   "@deepseek-ai/schemastery": "^3.18.2"
 }
 ```
@@ -185,7 +186,7 @@ craft.create_project({
 
 ## 🗂 项目落盘位置
 
-工坊数据写到 `C:\Users\Administrator\.dsh\myfile\<plugin-name>/`（默认）：
+工坊数据写到 `<DSH_HOME>/workshop/projects/<plugin-name>/`（默认，`<DSH_HOME>` 即 DSH 工作区根目录，Windows 上通常是 `C:\Users\<你>\.dsh`）：
 
 ```
 my-foo/
@@ -225,7 +226,7 @@ dsh plugin --profile web remove dsh-plugin-craft
 # 重启 dsh host
 ```
 
-仅删插件，**项目数据保留在磁盘上**。要彻底清理工坊产物可手动 `rm -rf C:\Users\Administrator\.dsh\myfile\`。
+仅删插件，**项目数据保留在磁盘上**。要彻底清理工坊产物可手动 `rm -rf <DSH_HOME>/workshop/projects/`。
 
 ---
 
@@ -272,7 +273,7 @@ pnpm pack             # → dsh-plugin-craft-X.Y.Z.tgz
 - **Chat 工具调用失败：项目目录无法写入**
   `projectsDir` 不存在或无写权限 → 检查路径/权限，或在 profile 里覆盖
 - **阶段 5 三轮不过**
-  生成代码有红线 / 冒烟失败 → 模型会交回给你，这不是插件 bug
+  生成代码有红线 / 冒烟失败 / 实机安装验收抓到运行时 BUG → 模型会交回给你，这不是插件 bug
 - **Git 源安装报 `ERR_PNPM_ALLOW_BUILD_NOT_SET`**
   pnpm ≥ 10 默认拒绝 git 依赖的 prepare
   → 在 profile 的 `pnpm-workspace.yaml` 加 `allowBuilds: { dsh-plugin-craft: true }`

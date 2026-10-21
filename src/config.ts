@@ -83,7 +83,12 @@ export const Config: Schema<Config> = Schema.object({
   projectsDir: Schema.string()
     // .default(x) = 用户没填这一项时用它。加载期就会被填上，
     //                所以代码里拿到的一定是字符串，不会是 undefined。
-    .default('C:\\Users\\Administrator\\.dsh\\myfile')
+    // ⚠️ 这里必须写**相对 DSH_HOME 的相对路径**，不能写死某台机器的绝对路径：
+    //    这是公开分发的插件，写死别人的 C:\Users\xxx\ 会让所有其他用户
+    //    都往一个他机器上根本不存在的目录里写数据。
+    //    默认落在 <DSH_HOME>/workshop/projects/<插件名>/project.json，
+    //    既不在 DSH_HOME 下（会污染插件源码目录），也不在 ~/.dsh 根（太脏）。
+    .default('workshop/projects')
     // .description(s) = 说明文字。它会出现在 `dsh --dump-config` 的输出里，
     //                   是给用户看的，所以这是*面向用户的文档*不是注释。
     .description('Directory holding workshop projects, resolved relative to the DSH home.'),
@@ -106,7 +111,7 @@ export const Config: Schema<Config> = Schema.object({
 //   **按 id 整行替换 config，不做深合并。**
 //
 // 举个例子。bundle 里配的是：
-//     projectsDir: 'C:\Users\Administrator\.dsh\myfile'
+//     projectsDir: 'workshop/projects'
 //     maxListedProjects: 50
 //
 // 用户在自己的 profile 里只想改 projectsDir，如果只写：

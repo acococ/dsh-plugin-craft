@@ -38,7 +38,9 @@
 #      implementation details — the assistant owns the implementation
 #      plan and writes the code itself.
 #   5. The assistant never installs the produced plugin into the current
-#      profile; the user installs it manually via dsh plugin add.
+#      profile; the user installs it manually via dsh plugin add. Stage 5
+#      may install into a DISPOSABLE temp profile to run the acceptance
+#      pass; that profile is thrown away afterwards.
 
 - insert:
     - id: dsh-plugin-craft
@@ -48,7 +50,9 @@
       config:
         # Where workshop projects are written on disk. Resolved relative to
         # the DSH home at apply time; overridable from the profile cordis.patch.yml.
-        projectsDir: 'C:\Users\Administrator\.dsh\myfile'
+        # Keep this relative — a hard-coded absolute path from the author's
+        # machine would break every other user of this published bundle.
+        projectsDir: 'workshop/projects'
         # Cap on auto-retained projects; older ones stay on disk but stop
         # showing in the UI listing.
         maxListedProjects: 50
@@ -97,16 +101,21 @@
                               f. Anything that must NEVER happen (constraints / safety / privacy).
                               g. Anything else the future-you would want to know about this plugin?
                              After each click, call craft.appendinterview(pluginName, field, value) where field is the question id and value is the chosen label.
-                          2. DESIGN — summarise the gathered answers as 4-6 bullets. Read the cordis-plugin-development skill for the bundle shape, then propose a cordis.patch.yml skeleton plus the bundle folder layout. Ask one clickable question: "Does this design match your intent?" Options: "Yes, looks right", "Mostly — change one thing" (use ask_user_question detail field), "No, rethink it".
-                          3. TASKS — break the work into a DAG and write 03-tasks.md. No question to the user.
-                          4. GENERATE — implement the plugin (src/, tests/, package.json, cordis.patch.yml, README in both languages). Use cordis-plugin-development skill. No question to the user.
-                          5. VERIFY — run dsh-plugin-dev check (--strict) and the bundle's own tests. If something is broken, ask one clickable question to decide whether to retry, skip, or abandon. Otherwise call craft.advance_stage with decision="accept".
+                          2. DESIGN — summarise the gathered answers as 4-6 bullets. Read the cordis-plugin-development skill for the bundle shape, then propose a cordis.patch.yml skeleton plus the bundle folder layout. **Every tool / service / event / config key must be written into 02-design.md as literal, compilable TypeScript** — that code block is the single source of truth that every worker copies verbatim; workers are forbidden from inventing field names. Ask one clickable question: "Does this design match your intent?" Options: "Yes, looks right", "Mostly — change one thing" (use ask_user_question detail field), "No, rethink it".
+                          3. TASKS — break the work into a DAG and write 03-tasks.md. One task per owned file; no two tasks may touch the same file. No question to the user.
+                          4. GENERATE — **you are the Captain, and you do NOT write code yourself.** First call agent_teams_create({ profile: "plugin-craft", approval: "required", description: <one-sentence design summary> }); this only writes the roster and DAG to disk and spawns nothing. Then STOP and wait — the user reviews the DAG in the Web UI and clicks "确认并启动团队". Only after that does the team (architect / implementer / reviewer) build src/, tests/, package.json, cordis.patch.yml and a bilingual README under the plugin-craft profile's protocol. If a team already exists, call agent_teams_status instead of creating a second one. No other question to the user.
+                          5. VERIFY — four gates in order, and every gate must actually RUN:
+                             (a) STATIC — dsh-plugin-dev check --strict plus the bundle's own tests.
+                             (b) PACK SMOKE — dsh-plugin-dev verify (pack → install into a disposable temp profile → boot → uninstall).
+                             (c) REAL-WORLD ACCEPTANCE — pack the bundle, install it into a DISPOSABLE temp profile, boot it, and EXERCISE the plugin for real: call every tool it registers, trigger every event it emits, and confirm every client slot/panel actually renders. Static checks and a bare boot do not reveal runtime bugs; only driving the plugin does. Write down each defect you hit, with reproduction steps. If the plugin exposes no runtime surface to drive, say so out loud and ask the user (one clickable question) whether to retry, skip, or abandon — never silently skip this gate.
+                             (d) COVERAGE — verify every acceptance item from 01-interview.md is met.
+                             Any gate failing sends you back to stage 4 to fix, then re-run from (a). When all four pass, write 05-verify-report.md (including the acceptance-run log and the defect list) and call craft.advance_stage with decision="accept".
 
-                        Stages that need a user click: 1 (interview), 2 (design review), 5 (final verification). Other stages run without bothering the user.
+                        Stages that need a user click: 1 (interview), 2 (design review), 4 (team-plan approval in the Web UI), 5 (final verification). Stages 3 and the rest of 4/5 run without bothering the user.
 
                         Language: follow the user's locale. Speak Chinese when they write Chinese.
 
-                        Never install the produced plugin into the current profile. The user runs dsh plugin add themselves.
+                        Never install the produced plugin into the CURRENT profile during stages 1-4. In stage 5, install only into a DISPOSABLE temp profile for the acceptance run and delete it afterwards — the current profile stays untouched until the user authorises the install on the delivery page. The user runs dsh plugin add themselves.
               complete: false
           # ask_user_question: the clickable option-card tool. The host
           # service @deepseek-ai/dsh-user-questions is mounted by the
@@ -134,6 +143,49 @@
           # 03-tasks.md as text — it cannot actually spin up workers.
           - id: agent-teams
             name: '@nanmicoder/dsh-agent-teams'
+            config:
+              # 成员不得再拆子代理，避免无限递归
+              memberMaxDepth: 0
+              profiles:
+                plugin-craft:
+                  description: 'DSH 插件开发固定班底：架构师 + 实现者 + 评审'
+                  taskPlanning: captain
+                  protocol: |
+                    工程纪律（所有成员必须遵守，违反视为任务未完成）：
+
+                    1. 契约唯一来源
+                       02-design.md 里的 TypeScript 代码块是接口的唯一真相。
+                       所有成员逐字照抄签名，禁止自行发明、重命名或"顺手优化"字段。
+                       需要新增/修改字段 → 先由架构师改 02-design.md，再派新任务。
+
+                    2. 命名规范
+                       文件名   kebab-case（store.ts / config.ts / index.ts）
+                       导出符号 PascalCase（class CraftStore / interface Config）
+                       工具名   <plugin>.<verb_snake_case>（craft.create_project）
+                       配置键   camelCase
+                       禁止出现 中文标识符、歧义名（util.ts / common.ts / helper.ts）
+
+                    3. 文件所有权
+                       每个文件只有一个 owner 成员，禁止修改他人 owned 的文件。
+                       需要跨文件改动 → 用 agent_teams_send_message 提给队长。
+
+                    4. 完成定义
+                       每个任务交付前必须实际运行 dsh-plugin-dev check --strict
+                       与该包的 tests，并在报告里附上命令原文与 exit code。
+                       没跑过 = 没做完。
+                  reviewPolicy:
+                    requirementsMinRounds: 1
+                    codeMaxRounds: 3
+                    maxRepairAttempts: 3
+                    requiredReviewers:
+                      - reviewer
+                  members:
+                    - name: architect
+                      role: '架构师：拆 DAG、维护 02-design.md 的字面签名契约、裁决接口冲突。不写实现代码。'
+                    - name: implementer
+                      role: '实现者：只实现分配到的任务，签名逐字照抄 02-design.md。改完立即跑 dsh-plugin-dev check --strict。'
+                    - name: reviewer
+                      role: '评审：对照 01-interview.md 与 02-design.md 的签名逐条核验，只读不改；发现问题打回修复。'
           # dsh-plugin-guide (community plugin, PerryLink/dsh-plugin-guide,
           # published on npm as `dsh-plugin-guide`):
           # provides the `cordis-plugin-development`, `editing-cordis-

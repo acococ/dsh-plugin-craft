@@ -15,7 +15,7 @@
 从本地 tarball 安装：
 
 ```powershell
-dsh plugin --profile web add "C:\Users\Administrator\.dsh\projects\dsh-plugin-craft\dsh-plugin-craft-0.3.5.tgz"
+dsh plugin --profile web add "<你的 DSH 工作区>\projects\dsh-plugin-craft\dsh-plugin-craft-0.3.5.tgz"
 ```
 
 从 GitHub 直接装：
@@ -113,7 +113,10 @@ feedback:   "再补点主功能的描述"   # revise 时可选
 
 ## 4. 项目落盘位置
 
-工坊数据写到 `C:\Users\Administrator\.dsh\myfile\<plugin-name>/`（默认）。要在 profile 里换位置，覆盖 `dsh-plugin-craft` 行的 `config`：
+工坊数据写到 `<DSH_HOME>/workshop/projects/<plugin-name>/`（默认）。要在 profile 里换位置，覆盖 `dsh-plugin-craft` 行的 `config`：
+
+> ⚠️ profile 的覆盖是**整块替换 config，不做深合并**——所以下面两个键要一起写，
+> 只写 `projectsDir` 会让 `maxListedProjects` 掉回 schema 默认值（50）。
 
 ```yaml
 - id: dsh-plugin-craft

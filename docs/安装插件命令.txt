@@ -9,7 +9,7 @@
 ────────────────────────────────────────────────────────────────
   从本地 tarball 安装（推荐，离线、版本固定、不触发 prepare）:
 
-      dsh plugin --profile web add "C:\Users\Administrator\.dsh\projects\dsh-plugin-craft\dsh-plugin-craft-0.3.5.tgz"
+      dsh plugin --profile web add "<你的 DSH 工作区>\projects\dsh-plugin-craft\dsh-plugin-craft-0.3.5.tgz"
 
   从 GitHub 直接装（会拉源码并跑 prepare，请先确认 pnpm ≥10):
 
@@ -40,7 +40,7 @@
  3. 升级（保留用户数据）
 ────────────────────────────────────────────────────────────────
   打新版 tarball:
-      cd C:\Users\Administrator\.dsh\projects\dsh-plugin-craft
+      cd <你的 DSH 工作区>\projects\dsh-plugin-craft
       pnpm install            # 重新拉依赖 + 自动触发 prepare build
       pnpm run typecheck      # 0 errors
       pnpm test               # 8/8 passed
@@ -48,10 +48,10 @@
 
   替换线上版本:
       dsh plugin --profile web remove dsh-plugin-craft
-      dsh plugin --profile web add "C:\Users\Administrator\.dsh\projects\dsh-plugin-craft\dsh-plugin-craft-0.3.X.tgz"
+      dsh plugin --profile web add "<你的 DSH 工作区>\projects\dsh-plugin-craft\dsh-plugin-craft-0.3.X.tgz"
       重启 dsh host + 浏览器硬刷新
 
-  用户落盘数据 (C:\Users\Administrator\.dsh\projects\dsh-plugin-craft\<plugin-name>\)
+  用户落盘数据 (<DSH_HOME>/workshop/projects/<plugin-name>\)
   在 remove / add 期间不会被删除；可手动 cp -r 备份。
 
 ────────────────────────────────────────────────────────────────
@@ -61,15 +61,17 @@
   重启 dsh host
 
   仅删插件、不删项目数据；项目目录在
-  C:\Users\Administrator\.dsh\projects\dsh-plugin-craft\ 下保留。
+  <DSH_HOME>/workshop/projects/ 下保留。
 
 ────────────────────────────────────────────────────────────────
  5. 提交 GitHub（开发者）
 ────────────────────────────────────────────────────────────────
-  cd C:\Users\Administrator\.dsh\projects\dsh-plugin-craft
+  cd <你的 DSH 工作区>\projects\dsh-plugin-craft
 
   git status
-  git add package.json cordis.patch.yml README.md README-zh.md src\ lib\ tests\ locale\ tsconfig.json tsdown.config.mjs vitest.config.ts LICENSE icon.svg USAGE.md 安装插件命令.txt pnpm-lock.yaml pnpm-workspace.yaml
+  # 注意：lib\ 与 *.tgz 已在 .gitignore 里（构建产物），README-zh.md 已废弃删除，
+  # 安装插件命令.txt 现位于 docs\ 下——不要 add 这些路径。
+  git add package.json cordis.patch.yml README.md USAGE.md src\ tests\ locale\ docs\ tsconfig.json tsdown.config.mjs vitest.config.ts LICENSE icon.svg pnpm-lock.yaml pnpm-workspace.yaml
 
   git commit -m "更新: <本次改动一句话描述>"
   git tag v0.3.5
@@ -78,13 +80,14 @@
 ────────────────────────────────────────────────────────────────
  6. 依赖关系（重要 — 安装前请确认宿主 profile 已具备）
 ────────────────────────────────────────────────────────────────
-  本插件运行需要的 4 个核心包（已在 peerDependencies 声明）：
+  本插件运行需要的 3 个核心包（已在 peerDependencies 声明）：
 
       @deepseek-ai/cordis         ^4.0.2     DSH 宿主自带，无需独立装
-      @deepseek-ai/dsh-tools      ≥0.1.2-rc.1<0.2.0  DSH 宿主自带，无需独立装
+      @deepseek-ai/dsh-tools      见 package.json 的 peerDependencies（整串照抄，别自己改）
+                                   DSH 宿主自带，无需独立装
       @deepseek-ai/schemastery    ^3.18.2    DSH 宿主自带，无需独立装
 
-  preset-craft 在 cordis.patch.yml 里直接 require 的 4 个官方包
+  preset-craft 在 cordis.patch.yml 里直接 require 的 5 个官方包
   （这些是宿主 profile 必须已经激活的标准组合）：
 
       @deepseek-ai/dsh-agent-preset        提供 preset 框架（注册入口）

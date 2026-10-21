@@ -27,7 +27,19 @@
 //   · resolve —— 把路径转成绝对路径（补上「你当前在哪个文件夹」这段前缀）
 //       用在哪：把配置里的相对目录变成完整路径。
 //       例子：resolve('C:/work', 'projects/x') → 'C:/work/projects/x'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
+
+// -----------------------------------------------------------------------------
+// 引入 1b：node:os 里的 homedir
+// -----------------------------------------------------------------------------
+//   node:os = Node 自带的「操作系统信息」模块。
+//
+//   · homedir —— 拿到「当前用户的家目录」（Windows 上是 C:\Users\<你>，
+//       macOS/Linux 上是 /home/<你>）。
+//       用在哪：DSH_HOME 没设时的兜底——官方 dsh-home-paths 的解析顺序是
+//       「显式配置 > $DSH_HOME > ~/.dsh」，所以这里必须拼出同一个 ~/.dsh，
+//       不能退成进程当前目录（那样相对路径会落到 CWD，行为不可预测）。
+import { homedir } from 'node:os'
 
 // -----------------------------------------------------------------------------
 // 引入 2：@deepseek-ai/cordis 里的 Context（纯类型）
@@ -155,11 +167,16 @@ export function apply(ctx: Context, config: ConfigShape): void {
   // /^[a-zA-Z]:[\\/]/       = 盘符开头 → Windows 绝对路径（形如 C:\ 或 D:/）
   // 两者任一成立就当它已经是完整地址，原样用（允许用户把工坊放到工作区之外）。
   // 都不成立说明是相对路径，用 resolve() 拼到 DSH_HOME 下面。
-  // process.env.xxx = 读环境变量；|| '.' = 万一 DSH_HOME 没设就退回当前目录。
+  //
+  // process.env.DSH_HOME = 宿主给的工作区根；官方 dsh-home-paths 的解析顺序是
+  // 「显式配置 > $DSH_HOME > ~/.dsh」，所以没设时用 homedir() 拼出 ~/.dsh，
+  // 和宿主保持一致——绝不能退成 '.'（进程当前目录），否则相对路径会跟着
+  // 启动位置漂移，同一份配置在不同机器/不同启动方式下落到不同地方。
+  const dshHome = process.env.DSH_HOME || join(homedir(), '.dsh')
   const projectsDir = config.projectsDir.startsWith('/') ||
     /^[a-zA-Z]:[\\/]/.test(config.projectsDir)
     ? config.projectsDir
-    : resolve(process.env.DSH_HOME || '.', config.projectsDir)
+    : resolve(dshHome, config.projectsDir)
 
   // --------------------------------------------------------------------------
   // 第二步：把 store 挂到宿主的上下文上
